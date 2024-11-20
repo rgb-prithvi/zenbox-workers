@@ -1,3 +1,10 @@
+export enum EmailCategory {
+  MARKETING = "Marketing",
+  NOTIFICATION = "Notification",
+  MEETING = "Meeting",
+  NEWSLETTER = "Newsletter"
+}
+
 export interface EmailAccount {
   id: string;
   user_id: string;
@@ -37,15 +44,22 @@ export interface EmailThread {
   created_at: Date;
 }
 
+export interface ThreadTodo {
+  text: string;
+  due_date?: string;
+  priority?: 'high' | 'medium' | 'low';
+  completed?: boolean;
+}
+
 export interface ThreadClassification {
   id: string;
   thread_id: string;
   summary_points: string[];
-  category: string;
+  category: EmailCategory | null;
   confidence_score: number;
   reasoning: string;
-  scheduling_todos: any;
-  action_todos: any;
+  scheduling_todos: ThreadTodo[];
+  action_todos: ThreadTodo[];
   is_automated: boolean;
   created_at: Date;
 }

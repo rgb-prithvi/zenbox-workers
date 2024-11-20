@@ -1,7 +1,12 @@
 import { google } from 'googleapis';
-import { EmailAccount, SyncMetrics } from '../types';
 import { createClient } from '@supabase/supabase-js';
 import { retryWithBackoff } from '../utils/retry';
+import { Database } from '../types/supabase';
+import { SyncMetrics } from '../types';
+
+type EmailAccount = Database['public']['Tables']['email_accounts']['Row'];
+type EmailThread = Database['public']['Tables']['email_threads']['Insert'];
+type Email = Database['public']['Tables']['emails']['Insert'];
 
 export class GmailService {
   private oauth2Client;
@@ -16,7 +21,7 @@ export class GmailService {
     );
 
     this.gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
-    this.supabase = createClient(
+    this.supabase = createClient<Database>(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_KEY!
     );
