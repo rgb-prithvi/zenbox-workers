@@ -1,13 +1,11 @@
-// src/index.ts
 import { createClient } from "@supabase/supabase-js";
 import { Redis } from "@upstash/redis";
-import { ConnectionOptions, Worker } from "bullmq";
+import { ConnectionOptions, Worker, Queue } from "bullmq";
 import dotenv from "dotenv";
-import http from "http"; // add this
+import http from "http";
 import { EmailClassifier } from "./services/classifier";
 import { GmailService } from "./services/gmail";
-import { SyncMetrics, WorkerJobData, EmailCategory } from "./types";
-import { Database } from './types/supabase';
+import { SyncMetrics, WorkerJobData } from "./types";
 
 dotenv.config();
 
@@ -49,35 +47,35 @@ const connection: ConnectionOptions = {
   },
 };
 
+// Add LLM queue setup
+const llmQueue = new Queue("llm-processing", { connection });
+
 const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
       const { email_account_id, sync_type, days_to_sync } = job.data;
       await job.updateProgress(0);
-      
+
       // Initialize services
       const gmailService = new GmailService();
       const classifier = new EmailClassifier();
-      const supabase = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_KEY!
-      );
+      const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
       const metrics: SyncMetrics = {
         startTime: Date.now(),
         threadsProcessed: 0,
         emailsProcessed: 0,
         errors: 0,
-        retries: 0
+        retries: 0,
       };
 
       // Step 1: Sync emails based on sync type
       console.log(`Starting ${sync_type} for account ${email_account_id}`);
       const { data: emailAccount } = await supabase
-        .from('email_accounts')
-        .select('*, email_sync_states(*)')
-        .eq('id', email_account_id)
+        .from("email_accounts")
+        .select("*, email_sync_states(*)")
+        .eq("id", email_account_id)
         .single();
 
       if (!emailAccount) {
@@ -85,21 +83,24 @@ const worker = new Worker<WorkerJobData>(
       }
 
       switch (sync_type) {
-        case 'FIRST_SYNC':
-        case 'BACKFILL_SYNC':
+        case "FIRST_SYNC":
+          await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 14, metrics);
+          break;
+        case "BACKFILL_SYNC":
           await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 30, metrics);
           break;
-        case 'INCREMENTAL_SYNC':
+        case "INCREMENTAL_SYNC":
           await gmailService.syncChanges(emailAccount.email, metrics);
           break;
       }
       await job.updateProgress(33);
 
       // Step 2: Classify new threads
-      console.log('Finding unclassified threads...');
+      console.log("Finding unclassified threads...");
       const { data: unclassifiedThreads } = await supabase
-        .from('email_threads')
-        .select(`
+        .from("email_threads")
+        .select(
+          `
           id,
           subject,
           thread_summary,
@@ -110,30 +111,49 @@ const worker = new Worker<WorkerJobData>(
             body,
             received_at
           )
-        `)
-        .eq('account_id', email_account_id)
-        .not('id', 'in', 
-          supabase.from('thread_classifications')
-            .select('thread_id')
+        `,
         )
-        .order('last_message_at', { ascending: false });
+        .eq("account_id", email_account_id)
+        .not("id", "in", supabase.from("thread_classifications").select("thread_id"))
+        .order("last_message_at", { ascending: false });
 
       console.log(`Found ${unclassifiedThreads?.length || 0} unclassified threads`);
 
       for (const thread of unclassifiedThreads || []) {
         try {
           const classification = await classifier.classifyThread(thread.id);
-          
+
           // If thread is not automated, queue it for LLM processing
           if (!classification.is_automated) {
-            // TODO: Queue for LLM processing
-            await redis.lpush('llm-processing-queue', JSON.stringify({
-              thread_id: thread.id,
-              account_id: email_account_id,
-              classification_id: classification.id
-            }));
+            // Get the latest email from the thread
+            const { data: latestEmail } = await supabase
+              .from("emails")
+              .select("*")
+              .eq("thread_id", thread.id)
+              .order("received_at", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (latestEmail) {
+              await llmQueue.add(
+                `llm-${latestEmail.id}`,
+                {
+                  email_id: latestEmail.id,
+                  thread_id: thread.id,
+                  account_id: email_account_id,
+                  classification_id: classification.id,
+                },
+                {
+                  attempts: 3,
+                  backoff: {
+                    type: 'exponential',
+                    delay: 1000,
+                  },
+                }
+              );
+            }
           }
-          
+
           metrics.threadsProcessed++;
         } catch (error) {
           console.error(`Error classifying thread ${thread.id}:`, error);
@@ -143,36 +163,36 @@ const worker = new Worker<WorkerJobData>(
       await job.updateProgress(66);
 
       // Store sync metrics
-      await supabase.from('sync_metrics').insert({
+      await supabase.from("sync_metrics").insert({
         email: emailAccount.email,
         duration_ms: Date.now() - metrics.startTime,
         threads_processed: metrics.threadsProcessed,
         emails_processed: metrics.emailsProcessed,
         error_count: metrics.errors,
         retry_count: metrics.retries,
-        success: metrics.errors === 0
+        success: metrics.errors === 0,
       });
 
       // Step 3: Process non-automated threads with LLM
       // This will be handled by a separate worker process
       await job.updateProgress(100);
 
-      return { 
+      return {
         success: true,
         metrics: {
           duration_ms: Date.now() - metrics.startTime,
           threads_processed: metrics.threadsProcessed,
           emails_processed: metrics.emailsProcessed,
           errors: metrics.errors,
-          retries: metrics.retries
-        }
+          retries: metrics.retries,
+        },
       };
     } catch (error) {
       console.error("Job failed:", error);
       throw error;
     }
   },
-  { connection }
+  { connection },
 );
 
 // Error handling
