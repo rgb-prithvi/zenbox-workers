@@ -45,49 +45,60 @@ const connection: ConnectionOptions = {
   },
 };
 
-const worker = new Worker(
-  "email-processing",
-  async (job) => {
-    console.log("Processing job:", job.id);
-    const { email } = job.data;
+const worker = new Worker("email-processing", async (job) => {
+  try {
+    // Simulate work with delays
+    await job.updateProgress(0);
+    console.log("Starting job:", job.id);
 
-    try {
-      // Stage 1: Sync
-      console.log("Starting sync for:", email);
-      await job.updateProgress(0);
-      // TODO: implement sync
+    await new Promise((r) => setTimeout(r, 2000));
+    await job.updateProgress(33);
+    console.log("Stage 1 complete");
 
-      // Stage 2: Classify
-      console.log("Starting classification");
-      await job.updateProgress(33);
-      // TODO: implement classification
+    await new Promise((r) => setTimeout(r, 2000));
+    await job.updateProgress(66);
+    console.log("Stage 2 complete");
 
-      // Stage 3: LLM
-      console.log("Starting LLM processing");
-      await job.updateProgress(66);
-      // TODO: implement LLM
+    await new Promise((r) => setTimeout(r, 2000));
+    await job.updateProgress(100);
+    console.log("Job complete");
 
-      await job.updateProgress(100);
-      console.log("Job completed:", job.id);
-    } catch (error) {
-      console.error("Job failed:", error);
-      throw error;
-    }
-  },
-  { connection },
-);
-
-// Error handling
-worker.on("completed", (job) => {
-  if (job) {
-    console.log(`Job ${job.id} completed successfully`);
+    return { success: true };
+  } catch (error) {
+    console.error("Job failed:", error);
+    throw error;
   }
 });
 
+// Error handling
+
+interface JobLog {
+  jobId: string;
+  status: string;
+  message: string;
+  timestamp: Date;
+}
+
+const jobLogs: JobLog[] = [];
+
+worker.on("completed", (job) => {
+  jobLogs.push({
+    jobId: job.id,
+    status: "completed",
+    message: "Job completed successfully",
+    timestamp: new Date(),
+  });
+  console.table(jobLogs);
+});
+
 worker.on("failed", (job, error) => {
-  if (job) {
-    console.error(`Job ${job.id} failed:`, error);
-  }
+  jobLogs.push({
+    jobId: job.id,
+    status: "failed",
+    message: error.message,
+    timestamp: new Date(),
+  });
+  console.table(jobLogs);
 });
 
 console.log("Worker started...");
