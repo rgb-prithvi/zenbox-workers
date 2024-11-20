@@ -83,7 +83,7 @@ const jobLogs: JobLog[] = [];
 
 worker.on("completed", (job) => {
   jobLogs.push({
-    jobId: job.id,
+    jobId: job?.id ?? "",
     status: "completed",
     message: "Job completed successfully",
     timestamp: new Date(),
@@ -93,7 +93,7 @@ worker.on("completed", (job) => {
 
 worker.on("failed", (job, error) => {
   jobLogs.push({
-    jobId: job.id,
+    jobId: job?.id ?? "",
     status: "failed",
     message: error.message,
     timestamp: new Date(),
