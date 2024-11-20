@@ -2,6 +2,9 @@
 import { Redis } from "@upstash/redis";
 import { ConnectionOptions, Worker } from "bullmq";
 import dotenv from "dotenv";
+import http from "http"; // add this
+
+dotenv.config();
 
 dotenv.config();
 
@@ -11,6 +14,22 @@ const token = process.env.UPSTASH_REDIS_TOKEN!;
 const redis = new Redis({
   url: host,
   token: token,
+});
+
+// Healthcheck server
+const server = http.createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200);
+    res.end("OK");
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Health check server listening on port ${PORT}`);
 });
 
 // create connection config for bull
