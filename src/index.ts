@@ -11,6 +11,7 @@ dotenv.config();
 // create redis connection
 const host = process.env.UPSTASH_REDIS_URL!;
 const token = process.env.UPSTASH_REDIS_TOKEN!;
+
 const redis = new Redis({
   url: host,
   token: token,
@@ -33,8 +34,10 @@ server.listen(PORT, () => {
 });
 
 // create connection config for bull
+const redisUrl = new URL(process.env.UPSTASH_REDIS_URL!);
+
 const connection: ConnectionOptions = {
-  host: host,
+  host: redisUrl.hostname,
   port: 6379,
   password: token,
   tls: {
