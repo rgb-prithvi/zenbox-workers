@@ -133,6 +133,54 @@ export type Database = {
           },
         ]
       }
+      llm_job_metrics: {
+        Row: {
+          created_at: string
+          duration_ms: number
+          email_id: string
+          error: string | null
+          id: string
+          job_id: string
+          success: boolean
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms: number
+          email_id: string
+          error?: string | null
+          id?: string
+          job_id: string
+          success: boolean
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number
+          email_id?: string
+          error?: string | null
+          id?: string
+          job_id?: string
+          success?: boolean
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_job_metrics_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "llm_job_metrics_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "email_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       thread_classifications: {
         Row: {
           action_todos: Json | null

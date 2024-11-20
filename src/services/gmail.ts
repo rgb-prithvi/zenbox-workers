@@ -300,7 +300,7 @@ export class GmailService {
       await this.updateSyncState(account.id, response.historyId);
 
     } catch (error) {
-      if (error.message.includes('404')) {
+      if (error instanceof Error && error.message.includes('404')) {
         console.log('History expired, falling back to full sync');
         return this.syncNewAccount(email, 14, metrics);
       }

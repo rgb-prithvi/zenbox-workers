@@ -1,9 +1,32 @@
 import { createClient } from "@supabase/supabase-js";
-import { AutomationIndicators, EmailInput } from "../types";
 import { Database } from "../types/supabase";
+import { EmailCategory } from "../types";
 
 type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
 type ThreadClassificationInsert = Database["public"]["Tables"]["thread_classifications"]["Insert"];
+
+type EmailInput = {
+  from: string;
+  subject: string;
+  body: string;
+};
+
+type CategoryResult = {
+  category: EmailCategory;
+  confidence: number;
+  match_counts: Record<EmailCategory, number>;
+};
+
+interface AutomationIndicators {
+  sender_patterns: string[];
+  subject_patterns: string[];
+  body_patterns: string[];
+  footer_patterns: string[];
+  marketing_patterns: string[];
+  notification_patterns: string[];
+  meeting_patterns: string[];
+  newsletter_patterns: string[];
+}
 
 export class EmailClassifier {
   private supabase;
@@ -174,7 +197,6 @@ export class EmailClassifier {
 
       return {
         is_automated,
-        category: null, // Will be set later if needed
         automation_confidence: this.calculateAutomationConfidence(total_matches, {
           no_reply_sender: has_noreply,
           unsubscribe_present: has_unsubscribe,
@@ -305,9 +327,9 @@ export class EmailClassifier {
       body: latestEmail.body || "",
     });
 
-    let category = null;
+    let categoryResult: CategoryResult | null = null;
     if (analysis.is_automated) {
-      category = this.categorizeAutomatedEmail(
+      categoryResult = this.categorizeAutomatedEmail(
         {
           from: latestEmail.from,
           subject: latestEmail.subject || "",
@@ -321,8 +343,8 @@ export class EmailClassifier {
     const classification: ThreadClassificationInsert = {
       thread_id: threadId,
       is_automated: analysis.is_automated,
-      category: category?.category || "NOTIFICATION", // Using the enum from Supabase
-      confidence_score: category?.confidence || analysis.automation_confidence,
+      category: categoryResult?.category ?? EmailCategory.NOTIFICATION,
+      confidence_score: categoryResult?.confidence || analysis.automation_confidence,
       reasoning: JSON.stringify({
         matched_patterns: analysis.matched_patterns,
         high_confidence_matches: analysis.high_confidence_matches,

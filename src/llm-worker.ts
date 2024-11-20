@@ -42,7 +42,7 @@ const worker = new Worker<LLMJobData>(
   async (job) => {
     const startTime = Date.now();
     const metric: LLMJobMetrics = {
-      jobId: job.id,
+      jobId: job.id!,
       emailId: job.data.email_id,
       threadId: job.data.thread_id,
       startTime,
@@ -63,7 +63,7 @@ const worker = new Worker<LLMJobData>(
       );
 
       await supabase.from("llm_job_metrics").insert({
-        job_id: job.id,
+        job_id: job.id!,
         email_id: job.data.email_id,
         thread_id: job.data.thread_id,
         duration_ms: metric.endTime - metric.startTime,
