@@ -31,6 +31,7 @@ const server = http.createServer((req, res) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Health check server listening on port ${PORT}`);
+  console.log("Worker started with connection to:", redisUrl.hostname);
 });
 
 // create connection config for bull
@@ -41,7 +42,7 @@ const connection: ConnectionOptions = {
   port: 6379,
   password: token,
   tls: {
-    rejectUnauthorized: false, // needed for upstash
+    rejectUnauthorized: false,
   },
 };
 
@@ -68,7 +69,7 @@ const worker = new Worker("email-processing", async (job) => {
     console.error("Job failed:", error);
     throw error;
   }
-});
+}, { connection });
 
 // Error handling
 
