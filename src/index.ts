@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Redis } from "@upstash/redis";
-import { ConnectionOptions, Worker, Queue } from "bullmq";
+import { ConnectionOptions, Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
 import http from "http";
 import { EmailClassifier } from "./services/classifier";
@@ -146,10 +146,10 @@ const worker = new Worker<WorkerJobData>(
                 {
                   attempts: 3,
                   backoff: {
-                    type: 'exponential',
+                    type: "exponential",
                     delay: 1000,
                   },
-                }
+                },
               );
             }
           }

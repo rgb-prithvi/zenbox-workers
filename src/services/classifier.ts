@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { Database } from '../types/supabase';
-import { AutomationIndicators, EmailInput } from '../types';
+import { AutomationIndicators, EmailInput } from "../types";
+import { Database } from "../types/supabase";
 
-type ThreadClassification = Database['public']['Tables']['thread_classifications']['Row'];
-type ThreadClassificationInsert = Database['public']['Tables']['thread_classifications']['Insert'];
+type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
+type ThreadClassificationInsert = Database["public"]["Tables"]["thread_classifications"]["Insert"];
 
 export class EmailClassifier {
   private supabase;
@@ -12,9 +12,9 @@ export class EmailClassifier {
   constructor() {
     this.supabase = createClient<Database>(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!
+      process.env.SUPABASE_SERVICE_KEY!,
     );
-    
+
     this.indicators = {
       sender_patterns: [
         "no[.-]?reply@",
@@ -301,8 +301,8 @@ export class EmailClassifier {
     const latestEmail = emails[emails.length - 1];
     const analysis = this.analyzeEmail({
       from: latestEmail.from,
-      subject: latestEmail.subject || '',
-      body: latestEmail.body || '',
+      subject: latestEmail.subject || "",
+      body: latestEmail.body || "",
     });
 
     let category = null;
@@ -310,8 +310,8 @@ export class EmailClassifier {
       category = this.categorizeAutomatedEmail(
         {
           from: latestEmail.from,
-          subject: latestEmail.subject || '',
-          body: latestEmail.body || '',
+          subject: latestEmail.subject || "",
+          body: latestEmail.body || "",
         },
         true,
       );
@@ -321,7 +321,7 @@ export class EmailClassifier {
     const classification: ThreadClassificationInsert = {
       thread_id: threadId,
       is_automated: analysis.is_automated,
-      category: category?.category || 'NOTIFICATION', // Using the enum from Supabase
+      category: category?.category || "NOTIFICATION", // Using the enum from Supabase
       confidence_score: category?.confidence || analysis.automation_confidence,
       reasoning: JSON.stringify({
         matched_patterns: analysis.matched_patterns,
@@ -329,7 +329,7 @@ export class EmailClassifier {
       }),
       summary_points: [], // Initialize as empty array
       scheduling_todos: null,
-      action_todos: null
+      action_todos: null,
     };
 
     const { data, error } = await this.supabase
