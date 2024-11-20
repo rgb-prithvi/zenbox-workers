@@ -13,12 +13,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.0.1",
+    "@ai-sdk/openai": "^1.0.2",
     "@google-cloud/local-auth": "^2.1.0",
     "@supabase/supabase-js": "^2.39.0",
     "@upstash/redis": "^1.28.0",
+    "ai": "^4.0.2",
     "bullmq": "^4.15.0",
     "dotenv": "^16.3.1",
-    "googleapis": "^129.0.0"
+    "googleapis": "^129.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
