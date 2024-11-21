@@ -54,13 +54,25 @@ const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
-      const { email_account_id, sync_type, days_to_sync } = job.data;
+      const { email_account_id, email, sync_type, days_to_sync } = job.data;
       await job.updateProgress(0);
 
       // Initialize services
+      const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+
+      // Get account details using either email_account_id or email
+      const { data: emailAccount } = await supabase
+        .from("email_accounts")
+        .select("*, email_sync_states(*)")
+        .or(`id.eq.${email_account_id},email.eq.${email}`)
+        .single();
+
+      if (!emailAccount) {
+        throw new Error(`No account found for ID ${email_account_id} or email ${email}`);
+      }
+
       const gmailService = new GmailService();
       const classifier = new EmailClassifier();
-      const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
       const metrics: SyncMetrics = {
         startTime: Date.now(),
@@ -72,12 +84,6 @@ const worker = new Worker<WorkerJobData>(
 
       // Step 1: Sync emails based on sync type
       console.log(`Starting ${sync_type} for account ${email_account_id}`);
-      const { data: emailAccount } = await supabase
-        .from("email_accounts")
-        .select("*, email_sync_states(*)")
-        .eq("id", email_account_id)
-        .single();
-
       if (!emailAccount) {
         throw new Error(`No account found for ID ${email_account_id}`);
       }

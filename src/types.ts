@@ -65,8 +65,9 @@ export interface ThreadClassification {
 }
 
 export interface WorkerJobData {
-  email_account_id: string;
-  sync_type: 'FIRST_SYNC' | 'INCREMENTAL_SYNC' | 'BACKFILL_SYNC';
+  email_account_id?: string;
+  email?: string;
+  sync_type: 'FIRST_SYNC' | 'BACKFILL_SYNC' | 'INCREMENTAL_SYNC';
   days_to_sync?: number;
 }
 
