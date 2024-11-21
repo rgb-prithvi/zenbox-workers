@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const email = "prithvi.arunaraj@gmail.com";
+
 async function main() {
   const queue = new Queue("email-processing", {
     connection: {
@@ -12,7 +14,7 @@ async function main() {
   });
 
   await queue.add("test-job", {
-    email: "prithvi@genaicollective.ai",
+    email: email,
     sync_type: "FIRST_SYNC",
     days_to_sync: 7,
   });

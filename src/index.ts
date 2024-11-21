@@ -10,11 +10,11 @@ import { SyncMetrics, WorkerJobData } from "./types";
 dotenv.config();
 
 const requiredEnvVars = [
-  'GMAIL_CLIENT_ID',
-  'GMAIL_CLIENT_SECRET',
-  'GMAIL_REDIRECT_URI',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_KEY'
+  "GMAIL_CLIENT_ID",
+  "GMAIL_CLIENT_SECRET",
+  "GMAIL_REDIRECT_URI",
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_KEY",
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -200,6 +200,18 @@ const worker = new Worker<WorkerJobData>(
         error_count: metrics.errors,
         retry_count: metrics.retries,
         success: metrics.errors === 0,
+      });
+
+      // Add sync state record
+      await supabase.from("email_sync_states").insert({
+        account_id: emailAccount.id,
+        last_history_id: emailAccount.last_history_id,
+        emails_synced: metrics.emailsProcessed,
+        threads_synced: metrics.threadsProcessed,
+        sync_type: sync_type,
+        status: metrics.errors === 0 ? "completed" : "failed",
+        error: metrics.errors > 0 ? "Sync completed with errors" : null,
+        completed_at: new Date().toISOString(),
       });
 
       // Step 3: Process non-automated threads with LLM
