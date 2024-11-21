@@ -54,6 +54,9 @@ const worker = new Worker<WorkerJobData>(
   async (job) => {
     try {
       const { email, sync_type, days_to_sync } = job.data;
+      console.log(
+        `Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
+      );
       await job.updateProgress(0);
 
       // Initialize services
@@ -91,7 +94,7 @@ const worker = new Worker<WorkerJobData>(
       }
 
       switch (sync_type) {
-        case "FIRST_SYNC":
+        case "FULL_SYNC":
           await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 14, metrics);
           break;
         case "BACKFILL_SYNC":

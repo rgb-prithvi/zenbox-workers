@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
+import http from "http";
 import { logRedisConnection, redisConnection } from "./config/redis";
 import { LLMService } from "./services/llm";
 import { Database } from "./types/supabase";
-import http from "http";
 
 dotenv.config();
 
@@ -215,7 +215,7 @@ const server = http.createServer((req, res) => {
   res.end();
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8090;
 server.listen(PORT, () => {
   console.log(`Health check server listening on port ${PORT}`);
 });

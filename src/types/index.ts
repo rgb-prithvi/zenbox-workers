@@ -1,7 +1,7 @@
 // Worker types
 export interface WorkerJobData {
   email_account_id: string;
-  sync_type: 'FIRST_SYNC' | 'INCREMENTAL_SYNC' | 'BACKFILL_SYNC';
+  sync_type: "FULL_SYNC" | "INCREMENTAL_SYNC" | "BACKFILL_SYNC";
   days_to_sync?: number;
 }
 
@@ -29,4 +29,4 @@ export interface EmailInput {
   from: string;
   subject: string;
   body: string;
-} 
+}
