@@ -47,6 +47,56 @@ export type Database = {
           },
         ]
       }
+      email_sync_states: {
+        Row: {
+          account_id: string
+          completed_at: string | null
+          created_at: string
+          emails_synced: number
+          error: string | null
+          id: string
+          last_history_id: string | null
+          started_at: string
+          status: string
+          sync_type: string
+          threads_synced: number
+        }
+        Insert: {
+          account_id: string
+          completed_at?: string | null
+          created_at?: string
+          emails_synced?: number
+          error?: string | null
+          id?: string
+          last_history_id?: string | null
+          started_at?: string
+          status: string
+          sync_type: string
+          threads_synced?: number
+        }
+        Update: {
+          account_id?: string
+          completed_at?: string | null
+          created_at?: string
+          emails_synced?: number
+          error?: string | null
+          id?: string
+          last_history_id?: string | null
+          started_at?: string
+          status?: string
+          sync_type?: string
+          threads_synced?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sync_states_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_threads: {
         Row: {
           account_id: string
@@ -83,6 +133,7 @@ export type Database = {
           bcc: string[] | null
           body: string | null
           cc: string[] | null
+          content_hash: string | null
           created_at: string
           from: string
           id: string
@@ -98,6 +149,7 @@ export type Database = {
           bcc?: string[] | null
           body?: string | null
           cc?: string[] | null
+          content_hash?: string | null
           created_at?: string
           from: string
           id: string
@@ -113,6 +165,7 @@ export type Database = {
           bcc?: string[] | null
           body?: string | null
           cc?: string[] | null
+          content_hash?: string | null
           created_at?: string
           from?: string
           id?: string
