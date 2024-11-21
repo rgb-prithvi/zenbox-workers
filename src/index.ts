@@ -7,6 +7,7 @@ import { getUnclassifiedThreads } from "./query-utils";
 import { EmailClassifier } from "./services/classifier";
 import { GmailService } from "./services/gmail";
 import { SyncMetrics, WorkerJobData } from "./types";
+import { redisConnection, logRedisConnection } from "./config/redis";
 
 dotenv.config();
 
@@ -24,15 +25,6 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// create redis connection
-const host = process.env.UPSTASH_REDIS_URL!;
-const token = process.env.UPSTASH_REDIS_TOKEN!;
-
-const redis = new Redis({
-  url: host,
-  token: token,
-});
-
 // Healthcheck server
 const server = http.createServer((req, res) => {
   if (req.url === "/health" || req.url === "/") {
@@ -49,26 +41,14 @@ server.listen(PORT, () => {
   console.log(`Health check server listening on port ${PORT}`);
   console.log(
     "Worker started with connection to:",
-    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
+    process.env.NODE_ENV === "production" ? redisConnection.host : "localhost",
   );
 });
 
-// create connection config for bull
-const redisUrl = new URL(process.env.UPSTASH_REDIS_URL!);
-
-const connection: ConnectionOptions = {
-  host: process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
-  port: 6379,
-  ...(process.env.NODE_ENV === "production" && {
-    password: token,
-    tls: {
-      rejectUnauthorized: false,
-    },
-  }),
-};
-
 // Add LLM queue setup
-const llmQueue = new Queue("llm-processing", { connection });
+logRedisConnection();
+
+const llmQueue = new Queue("llm-processing", { connection: redisConnection });
 
 const worker = new Worker<WorkerJobData>(
   "email-processing",
@@ -256,7 +236,7 @@ const worker = new Worker<WorkerJobData>(
       throw error;
     }
   },
-  { connection },
+  { connection: redisConnection }
 );
 
 // Error handling

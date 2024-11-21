@@ -1,23 +1,16 @@
 import { Queue } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import { redisConnection, logRedisConnection } from "./config/redis";
 
 dotenv.config();
 
-const redisUrl = new URL(process.env.UPSTASH_REDIS_URL!);
-const connection = {
-  host: redisUrl.hostname,
-  port: 6379,
-  password: process.env.UPSTASH_REDIS_TOKEN,
-  tls: {
-    rejectUnauthorized: false,
-  },
-};
-
 async function testLLMWorker() {
+  logRedisConnection();
+  
   try {
     // Create the queue
-    const llmQueue = new Queue("llm-processing", { connection });
+    const llmQueue = new Queue("llm-processing", { connection: redisConnection });
     
     // Get some test emails from your database
     const supabase = createClient(

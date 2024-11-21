@@ -1,17 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
-import { ConnectionOptions, Worker } from "bullmq";
+import { ConnectionOptions, Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
 import { LLMService } from "./services/llm";
 import { Database } from "./types/supabase";
+import { redisConnection, logRedisConnection } from "./config/redis";
 
 dotenv.config();
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'UPSTASH_REDIS_URL',
-  'UPSTASH_REDIS_TOKEN',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_KEY'
+  "UPSTASH_REDIS_URL",
+  "UPSTASH_REDIS_TOKEN",
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_KEY",
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -20,16 +21,8 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// Redis setup
-const redisUrl = new URL(process.env.UPSTASH_REDIS_URL!);
-const connection: ConnectionOptions = {
-  host: redisUrl.hostname,
-  port: 6379,
-  password: process.env.UPSTASH_REDIS_TOKEN,
-  tls: {
-    rejectUnauthorized: false,
-  },
-};
+// Remove the old Redis setup and use the shared config
+logRedisConnection();
 
 interface LLMJobData {
   email_id: string;
@@ -46,13 +39,13 @@ interface LLMJobMetrics {
   endTime?: number;
   status: "completed" | "failed";
   error?: string;
-  processingDuration?: number;  // Added for easier tracking
+  processingDuration?: number; // Added for easier tracking
 }
 
 // Initialize Supabase client once
 const supabase = createClient<Database>(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
+  process.env.SUPABASE_SERVICE_KEY!,
 );
 
 // Track worker statistics
@@ -65,9 +58,24 @@ const workerStats = {
 
 const jobMetrics: LLMJobMetrics[] = [];
 
+// Add after Redis connection setup
+async function testRedisConnection() {
+  try {
+    const testQueue = new Queue("test-queue", { connection: redisConnection });
+    await testQueue.add("test-job", { test: true });
+    const jobs = await testQueue.getJobs(["waiting"]);
+    console.log("📡 Redis connection test:", jobs.length > 0 ? "SUCCESS" : "QUEUE EMPTY");
+    await testQueue.close();
+  } catch (error) {
+    console.error("❌ Redis connection test failed:", error);
+    process.exit(1);
+  }
+}
+
 const worker = new Worker<LLMJobData>(
   "llm-processing",
   async (job) => {
+    await testRedisConnection();
     // Get email subject for logging
     const { data: email } = await supabase
       .from("emails")
@@ -75,9 +83,11 @@ const worker = new Worker<LLMJobData>(
       .eq("id", job.data.email_id)
       .single();
 
-    console.log(`\n[Job ${job.id}] Starting processing for email "${email?.subject}" (ID: ${job.data.email_id})`);
+    console.log(
+      `\n[Job ${job.id}] Starting processing for email "${email?.subject}" (ID: ${job.data.email_id})`,
+    );
     const startTime = Date.now();
-    
+
     const metric: LLMJobMetrics = {
       jobId: job.id!,
       emailId: job.data.email_id,
@@ -94,7 +104,7 @@ const worker = new Worker<LLMJobData>(
 
       console.log(`[Job ${job.id}] Initializing LLM service...`);
       const llmService = new LLMService();
-      
+
       console.log(`[Job ${job.id}] Processing email through LLM...`);
       await llmService.processEmail(job.data.email_id);
 
@@ -122,7 +132,6 @@ const worker = new Worker<LLMJobData>(
 
       console.log(`[Job ${job.id}] Processing completed in ${metric.processingDuration}ms`);
       return { success: true };
-
     } catch (error) {
       metric.status = "failed";
       metric.error = error instanceof Error ? error.message : "Unknown error";
@@ -133,12 +142,15 @@ const worker = new Worker<LLMJobData>(
       workerStats.totalProcessed++;
       workerStats.failed++;
 
-      console.error(`[Job ${job.id}] Processing failed after ${metric.processingDuration}ms:`, error);
+      console.error(
+        `[Job ${job.id}] Processing failed after ${metric.processingDuration}ms:`,
+        error,
+      );
       throw error;
     }
   },
   {
-    connection,
+    connection: redisConnection,
     concurrency: 5,
     limiter: {
       max: 10,
@@ -148,13 +160,22 @@ const worker = new Worker<LLMJobData>(
       retryPolicy: {
         attempts: 3,
         backoff: {
-          type: 'exponential',
+          type: "exponential",
           delay: 1000,
         },
       },
     },
   },
 );
+
+// Add connection status logging
+worker.on("ready", () => {
+  console.log("🟢 LLM Worker is ready to process jobs");
+});
+
+worker.on("error", (error) => {
+  console.error("🔴 LLM Worker encountered an error:", error);
+});
 
 // Enhanced error handling and logging
 worker.on("completed", async (job) => {
@@ -164,16 +185,16 @@ worker.on("completed", async (job) => {
     .eq("id", job.data.email_id)
     .single();
 
-  const duration = job?.finishedOn ? job.finishedOn - job.timestamp : 'unknown';
+  const duration = job?.finishedOn ? job.finishedOn - job.timestamp : "unknown";
   console.log(
-    `✅ [Job ${job?.id}] Completed LLM processing for "${email?.subject}" (Email ID: ${job?.data.email_id}, Thread: ${job?.data.thread_id}, Duration: ${duration}ms)`
+    `✅ [Job ${job?.id}] Completed LLM processing for "${email?.subject}" (Email ID: ${job?.data.email_id}, Thread: ${job?.data.thread_id}, Duration: ${duration}ms)`,
   );
 });
 
 worker.on("failed", (job, error) => {
   console.error(
     `❌ [Job ${job?.id}] Failed LLM processing for email ${job?.data.email_id} in thread ${job?.data.thread_id}:`,
-    error
+    error,
   );
 });
 
@@ -185,7 +206,7 @@ setInterval(() => {
     - Total jobs processed: ${workerStats.totalProcessed}
     - Successful: ${workerStats.successful}
     - Failed: ${workerStats.failed}
-    - Success rate: ${(workerStats.successful / workerStats.totalProcessed * 100).toFixed(1)}%
+    - Success rate: ${((workerStats.successful / workerStats.totalProcessed) * 100).toFixed(1)}%
   `);
 }, STATS_INTERVAL);
 
@@ -193,7 +214,7 @@ setInterval(() => {
 process.on("SIGTERM", async () => {
   console.log("\n🛑 Shutting down LLM worker...");
   await worker.close();
-  
+
   console.log("Final worker statistics:", workerStats);
   process.exit(0);
 });
