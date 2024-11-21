@@ -87,14 +87,13 @@ const worker = new Worker<WorkerJobData>(
         .eq("email", email)
         .single();
 
-      if (!emailAccount) {
+      if (error || !emailAccount) {
         throw new Error(
-          `No account found for email ${email} (Error: ${error?.message || "unknown"})`,
+          `No account found for email ${email} (Error: ${error?.message || "account not found"})`,
         );
       }
 
       const gmailService = new GmailService();
-
       const classifier = new EmailClassifier();
 
       const metrics: SyncMetrics = {
@@ -126,6 +125,13 @@ const worker = new Worker<WorkerJobData>(
 
       // Step 2: Classify new threads
       console.log("Finding unclassified threads...");
+      // First, get all classified thread IDs
+      const { data: classifiedThreadIds } = await supabase
+        .from("thread_classifications")
+        .select("thread_id");
+
+      // Then use the results in the main query
+      console.log("Email Account ID:", emailAccount.id);
       const { data: unclassifiedThreads } = await supabase
         .from("email_threads")
         .select(
@@ -143,7 +149,7 @@ const worker = new Worker<WorkerJobData>(
         `,
         )
         .eq("account_id", emailAccount.id)
-        .not("id", "in", supabase.from("thread_classifications").select("thread_id"))
+        .not("id", "in", classifiedThreadIds?.map((row) => row.thread_id) || [])
         .order("last_message_at", { ascending: false });
 
       console.log(`Found ${unclassifiedThreads?.length || 0} unclassified threads`);

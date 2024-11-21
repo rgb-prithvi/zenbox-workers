@@ -81,7 +81,11 @@ export class GmailService {
 
   private async gmailRequest(accessToken: string, endpoint: string, params: Record<string, string>) {
     const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/${endpoint}`);
-    Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+    Object.keys(params).forEach(key => {
+      if (params[key]) {
+        url.searchParams.append(key, params[key])
+      }
+    });
 
     const response = await fetch(url.toString(), {
       headers: {
@@ -91,7 +95,12 @@ export class GmailService {
     });
 
     if (!response.ok) {
-      throw new Error(`Gmail API request failed: ${response.status} - ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(
+        `Gmail API request failed: ${response.status} - ${response.statusText}\n` +
+        `Endpoint: ${endpoint}\n` +
+        `Error: ${errorText}`
+      );
     }
 
     return response.json();
@@ -278,11 +287,18 @@ export class GmailService {
     if (error) throw new Error(`No account found for ${email}`);
 
     const accessToken = await this.setupGmailClient(account);
+    const startHistoryId = account.email_sync_states?.last_history_id;
+
+    if (!startHistoryId) {
+      console.log('No history ID found, falling back to full sync');
+      return this.syncNewAccount(email, 14, metrics);
+    }
 
     try {
+      console.log(`Fetching history changes since ID: ${startHistoryId}`);
       const response = await retryWithBackoff(() =>
         this.gmailRequest(accessToken, 'history', {
-          startHistoryId: account.email_sync_states?.last_history_id,
+          startHistoryId: startHistoryId,
         })
       );
 

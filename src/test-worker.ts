@@ -15,8 +15,7 @@ async function main() {
 
   await queue.add("test-job", {
     email: email,
-    sync_type: "FIRST_SYNC",
-    days_to_sync: 7,
+    sync_type: "INCREMENTAL_SYNC",
   });
 
   console.log("Test job added to queue");
