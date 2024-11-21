@@ -3,42 +3,35 @@ import { createClient } from "@supabase/supabase-js";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { Database } from "../types/supabase";
+import SYSTEM_PROMPT from "./prompts";
 
 // Define the response schema using Zod
 const responseSchema = z.object({
-  summary_points: z.array(z.string()).describe("Key points from the email"),
+  summary_points: z.array(z.string()).describe("Bullet points summarizing the email"),
   category: z
-    .enum([
-      "DISCUSSION_ACTIVE",
-      "DISCUSSION_PASSIVE",
-      "NOTIFICATIONS",
-      "MEETING_RELATED",
-      "NEWSLETTER",
-      "MARKETING",
-      "INBOUND",
-      "OTHER",
-    ])
+    .enum(["ACTIVE_DISCUSSION", "PASSIVE_DISCUSSION", "NOTIFICATION", "NOT_RELEVANT"])
     .describe("The type of email"),
   confidence_score: z.number().min(0).max(1).describe("Confidence score of the classification"),
-  reasoning: z.string().describe("Explanation for the classification"),
+  reasoning: z.string().describe("Brief explanation for the classification"),
   scheduling_todos: z
     .array(
       z.object({
-        text: z.string(),
-        due_date: z.string().optional(),
-        priority: z.enum(["high", "medium", "low"]).optional(),
+        what: z.string(),
+        when: z.string(),
+        with: z.string(),
       }),
     )
-    .optional(),
+    .optional()
+    .describe("Calendar-specific actions that need exact time blocks"),
   action_todos: z
     .array(
       z.object({
-        text: z.string(),
-        due_date: z.string().optional(),
-        priority: z.enum(["high", "medium", "low"]).optional(),
+        action: z.string(),
+        deadline: z.string().optional(),
       }),
     )
-    .optional(),
+    .optional()
+    .describe("User-specific action items, excluding counterparty responsibilities"),
 });
 
 type LLMResponse = z.infer<typeof responseSchema>;
@@ -46,6 +39,7 @@ type LLMResponse = z.infer<typeof responseSchema>;
 export class LLMService {
   private openai;
   private supabase;
+  private readonly SYSTEM_PROMPT = SYSTEM_PROMPT;
 
   constructor() {
     this.openai = createOpenAI({
@@ -75,10 +69,6 @@ Subject: ${email.subject}
 Date: ${new Date(email.received_at).toISOString()}
 Body: ${email.body}`;
   }
-
-  private readonly SYSTEM_PROMPT = `
-    // TODO: Insert your system prompt here
-  `;
 
   async processEmail(emailId: string): Promise<void> {
     try {
