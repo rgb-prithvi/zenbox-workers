@@ -32,19 +32,24 @@ const server = http.createServer((req, res) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Health check server listening on port ${PORT}`);
-  console.log("Worker started with connection to:", redisUrl.hostname);
+  console.log(
+    "Worker started with connection to:",
+    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
+  );
 });
 
 // create connection config for bull
 const redisUrl = new URL(process.env.UPSTASH_REDIS_URL!);
 
 const connection: ConnectionOptions = {
-  host: redisUrl.hostname,
+  host: process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
   port: 6379,
-  password: token,
-  tls: {
-    rejectUnauthorized: false,
-  },
+  ...(process.env.NODE_ENV === "production" && {
+    password: token,
+    tls: {
+      rejectUnauthorized: false,
+    },
+  }),
 };
 
 // Add LLM queue setup
@@ -54,21 +59,24 @@ const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
-      const { email_account_id, email, sync_type, days_to_sync } = job.data;
+      const { email, sync_type, days_to_sync } = job.data;
       await job.updateProgress(0);
 
       // Initialize services
       const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
-      // Get account details using either email_account_id or email
-      const { data: emailAccount } = await supabase
+      // Get account details using email
+      console.log("Searching for email account:", email);
+      const { data: emailAccount, error } = await supabase
         .from("email_accounts")
-        .select("*, email_sync_states(*)")
-        .or(`id.eq.${email_account_id},email.eq.${email}`)
+        .select("*")
+        .eq("email", email)
         .single();
 
       if (!emailAccount) {
-        throw new Error(`No account found for ID ${email_account_id} or email ${email}`);
+        throw new Error(
+          `No account found for email ${email} (Error: ${error?.message || "unknown"})`,
+        );
       }
 
       const gmailService = new GmailService();
@@ -83,9 +91,9 @@ const worker = new Worker<WorkerJobData>(
       };
 
       // Step 1: Sync emails based on sync type
-      console.log(`Starting ${sync_type} for account ${email_account_id}`);
+      console.log(`Starting ${sync_type} for account ${email}`);
       if (!emailAccount) {
-        throw new Error(`No account found for ID ${email_account_id}`);
+        throw new Error(`No account found for ID ${email}`);
       }
 
       switch (sync_type) {
@@ -119,7 +127,7 @@ const worker = new Worker<WorkerJobData>(
           )
         `,
         )
-        .eq("account_id", email_account_id)
+        .eq("account_id", emailAccount.id)
         .not("id", "in", supabase.from("thread_classifications").select("thread_id"))
         .order("last_message_at", { ascending: false });
 
@@ -146,7 +154,7 @@ const worker = new Worker<WorkerJobData>(
                 {
                   email_id: latestEmail.id,
                   thread_id: thread.id,
-                  account_id: email_account_id,
+                  account_id: emailAccount.id,
                   classification_id: classification.id,
                 },
                 {

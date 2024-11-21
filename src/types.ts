@@ -2,7 +2,7 @@ export enum EmailCategory {
   MARKETING = "Marketing",
   NOTIFICATION = "Notification",
   MEETING = "Meeting",
-  NEWSLETTER = "Newsletter"
+  NEWSLETTER = "Newsletter",
 }
 
 export interface EmailAccount {
@@ -15,7 +15,7 @@ export interface EmailAccount {
   created_at: Date;
   email_sync_states?: {
     last_history_id: string;
-  }
+  };
 }
 
 export interface Email {
@@ -47,7 +47,7 @@ export interface EmailThread {
 export interface ThreadTodo {
   text: string;
   due_date?: string;
-  priority?: 'high' | 'medium' | 'low';
+  priority?: "high" | "medium" | "low";
   completed?: boolean;
 }
 
@@ -65,9 +65,8 @@ export interface ThreadClassification {
 }
 
 export interface WorkerJobData {
-  email_account_id?: string;
-  email?: string;
-  sync_type: 'FIRST_SYNC' | 'BACKFILL_SYNC' | 'INCREMENTAL_SYNC';
+  email: string;
+  sync_type: "FIRST_SYNC" | "BACKFILL_SYNC" | "INCREMENTAL_SYNC";
   days_to_sync?: number;
 }
 
@@ -77,4 +76,4 @@ export interface SyncMetrics {
   emailsProcessed: number;
   errors: number;
   retries: number;
-} 
+}
