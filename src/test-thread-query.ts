@@ -6,7 +6,7 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 const main = async () => {
-  const accountId = "";
+  const accountId = "3df13029-0d2f-4318-8b77-28c792031f44";
 
   // First get all threads for this account
   const { data: allThreads, error: threadsError } = await supabase

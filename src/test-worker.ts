@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = "prithvi.arunaraj@gmail.com";
+const email = "prithvi@genaicollective.ai";
 
 async function main() {
   const queue = new Queue("email-processing", {
@@ -15,7 +15,8 @@ async function main() {
 
   await queue.add("test-job", {
     email: email,
-    sync_type: "INCREMENTAL_SYNC",
+    sync_type: "FULL_SYNC",
+    days_to_sync: 3,
   });
 
   console.log("Test job added to queue");
