@@ -7,7 +7,7 @@ if (!process.env.UPSTASH_REDIS_URL || !process.env.UPSTASH_REDIS_TOKEN) {
   throw new Error("Missing required Redis environment variables");
 }
 
-const redisUrl = new URL(process.env.UPSTASH_REDIS_URL);
+export const redisUrl = new URL(process.env.UPSTASH_REDIS_URL);
 
 export const redisConnection: ConnectionOptions = {
   host: process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
@@ -24,6 +24,6 @@ export const redisConnection: ConnectionOptions = {
 export function logRedisConnection() {
   console.log(
     "Connecting to Redis:",
-    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost"
+    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
   );
-} 
+}

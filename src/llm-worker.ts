@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { ConnectionOptions, Queue, Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
+import { logRedisConnection, redisConnection } from "./config/redis";
 import { LLMService } from "./services/llm";
 import { Database } from "./types/supabase";
-import { redisConnection, logRedisConnection } from "./config/redis";
 
 dotenv.config();
 
@@ -149,23 +149,7 @@ const worker = new Worker<LLMJobData>(
       throw error;
     }
   },
-  {
-    connection: redisConnection,
-    concurrency: 5,
-    limiter: {
-      max: 10,
-      duration: 1000,
-    },
-    settings: {
-      retryPolicy: {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 1000,
-        },
-      },
-    },
-  },
+  { connection: redisConnection },
 );
 
 // Add connection status logging

@@ -1,13 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
-import { Redis } from "@upstash/redis";
-import { ConnectionOptions, Queue, Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
 import http from "http";
+import { logRedisConnection, redisConnection, redisUrl } from "./config/redis";
 import { getUnclassifiedThreads } from "./query-utils";
 import { EmailClassifier } from "./services/classifier";
 import { GmailService } from "./services/gmail";
 import { SyncMetrics, WorkerJobData } from "./types";
-import { redisConnection, logRedisConnection } from "./config/redis";
 
 dotenv.config();
 
@@ -41,7 +40,7 @@ server.listen(PORT, () => {
   console.log(`Health check server listening on port ${PORT}`);
   console.log(
     "Worker started with connection to:",
-    process.env.NODE_ENV === "production" ? redisConnection.host : "localhost",
+    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
   );
 });
 
@@ -236,7 +235,7 @@ const worker = new Worker<WorkerJobData>(
       throw error;
     }
   },
-  { connection: redisConnection }
+  { connection: redisConnection },
 );
 
 // Error handling
