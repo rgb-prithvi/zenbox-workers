@@ -27,6 +27,42 @@ export class GmailService {
     );
   }
 
+  async refreshToken(refreshToken: string) {
+    if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET) {
+      throw new Error('Missing Gmail OAuth credentials in environment');
+    }
+
+    try {
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: process.env.GMAIL_CLIENT_ID,
+          client_secret: process.env.GMAIL_CLIENT_SECRET,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Token refresh failed: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+      const now = Date.now();
+      
+      return {
+        access_token: data.access_token,
+        refresh_token: refreshToken,
+        expires_at: new Date(now + data.expires_in * 1000).toISOString()
+      };
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      throw error;
+    }
+  }
+
   private async setupGmailClient(account: EmailAccount): Promise<string> {
     console.log(`Setting up Gmail client for account: ${account.email}`);
     
@@ -36,32 +72,8 @@ export class GmailService {
     if (expiresAt <= now) {
       console.log(`Refreshing token for account: ${account.email}`);
       
-      const response = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: process.env.GMAIL_CLIENT_ID!,
-          client_secret: process.env.GMAIL_CLIENT_SECRET!,
-          refresh_token: account.refresh_token,
-          grant_type: 'refresh_token',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to refresh token');
-      }
-
-      const data = await response.json();
-      
-      await this.supabase
-        .from('email_accounts')
-        .update({
-          access_token: data.access_token,
-          expires_at: new Date(now + data.expires_in * 1000).toISOString()
-        })
-        .eq('email', account.email);
-
-      return data.access_token;
+      const { access_token } = await this.refreshToken(account.refresh_token);
+      return access_token;
     }
 
     return account.access_token;

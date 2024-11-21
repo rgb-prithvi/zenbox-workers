@@ -9,6 +9,20 @@ import { SyncMetrics, WorkerJobData } from "./types";
 
 dotenv.config();
 
+const requiredEnvVars = [
+  'GMAIL_CLIENT_ID',
+  'GMAIL_CLIENT_SECRET',
+  'GMAIL_REDIRECT_URI',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_KEY'
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`Missing required environment variable: ${envVar}`);
+  }
+}
+
 // create redis connection
 const host = process.env.UPSTASH_REDIS_URL!;
 const token = process.env.UPSTASH_REDIS_TOKEN!;
@@ -80,6 +94,7 @@ const worker = new Worker<WorkerJobData>(
       }
 
       const gmailService = new GmailService();
+
       const classifier = new EmailClassifier();
 
       const metrics: SyncMetrics = {
