@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { logRedisConnection, redisConnection } from "./config/redis";
 import { LLMService } from "./services/llm";
 import { Database } from "./types/supabase";
+import http from "http";
 
 dotenv.config();
 
@@ -75,7 +76,6 @@ async function testRedisConnection() {
 const worker = new Worker<LLMJobData>(
   "llm-processing",
   async (job) => {
-    await testRedisConnection();
     // Get email subject for logging
     const { data: email } = await supabase
       .from("emails")
@@ -204,3 +204,18 @@ process.on("SIGTERM", async () => {
 });
 
 console.log("🚀 LLM worker started...");
+
+const server = http.createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200);
+    res.end("OK");
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Health check server listening on port ${PORT}`);
+});
