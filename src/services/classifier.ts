@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../types/supabase";
 import { EmailCategory } from "../types";
+import { Database } from "../types/supabase";
 
 type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
 type ThreadClassificationInsert = Database["public"]["Tables"]["thread_classifications"]["Insert"];
@@ -120,15 +120,24 @@ export class EmailClassifier {
         "payment",
       ],
       meeting_patterns: [
-        "invitation",
-        "meeting",
-        "calendar",
-        "scheduled",
-        "appointment",
-        "join",
-        "(?:google )?meet",
-        "zoom",
-        "teams",
+        "^invitation:\\s",
+        "^updated invitation:",
+        "^accepted:\\s+meeting",
+        "^declined:\\s+meeting",
+        "^tentatively accepted:",
+        "^meeting\\s+request:",
+        "^calendar\\s+notification:",
+
+        "meet\\.google\\.com\\/[\\w-]+",
+        "zoom\\.us\\/j\\/\\d+",
+        "teams\\.microsoft\\.com\\/l\\/meetup-join",
+
+        "calendly\\.com\\/[\\w-]+\\/",
+        "your\\s+(?:meeting|appointment)\\s+is\\s+confirmed",
+
+        "when:\\s.*\\d{1,2}:\\d{2}\\s*(?:am|pm|AM|PM)",
+        "where:\\s",
+        "organizer:\\s",
       ],
       newsletter_patterns: [
         "newsletter",
