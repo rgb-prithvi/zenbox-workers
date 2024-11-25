@@ -11,7 +11,7 @@ You are an AI email assistant designed to help users manage their inbox through 
 First, review the user context provided.
 
 <user_context>
-${userContext}
+{{userContext}}
 </user_context>
 
 Note: This context is a subset of the user's complete experience and should inform but not limit your analysis.
@@ -38,7 +38,9 @@ Classification Categories:
 3. NOTIFICATION: FYI messages requiring no action
 4. MEETING: Meeting invitations/notifications (FYI/invite only)
 5. NEWSLETTER: An email newsletter containing informational content that the user may want to
-6. NOT_RELEVANT: Irrelevant or promotional content
+6. MARKETING: Promotional / marketing content
+7. NOT_RELEVANT: Irrelevant content that does not fit any of the above categories 
+
 
 Output Format:
 Your response must strictly follow this JSON structure:

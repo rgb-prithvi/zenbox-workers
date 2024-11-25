@@ -92,6 +92,20 @@ export type Database = {
             foreignKeyName: "email_sync_states_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "active_thread_details"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "email_sync_states_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "categorized_threads"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "email_sync_states_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "email_accounts"
             referencedColumns: ["id"]
           },
@@ -181,6 +195,20 @@ export type Database = {
             foreignKeyName: "emails_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
+            referencedRelation: "active_thread_details"
+            referencedColumns: ["thread_id"]
+          },
+          {
+            foreignKeyName: "emails_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "categorized_threads"
+            referencedColumns: ["thread_id"]
+          },
+          {
+            foreignKeyName: "emails_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
             referencedRelation: "email_threads"
             referencedColumns: ["id"]
           },
@@ -229,6 +257,20 @@ export type Database = {
             foreignKeyName: "llm_job_metrics_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
+            referencedRelation: "active_thread_details"
+            referencedColumns: ["thread_id"]
+          },
+          {
+            foreignKeyName: "llm_job_metrics_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "categorized_threads"
+            referencedColumns: ["thread_id"]
+          },
+          {
+            foreignKeyName: "llm_job_metrics_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
             referencedRelation: "email_threads"
             referencedColumns: ["id"]
           },
@@ -237,7 +279,7 @@ export type Database = {
       thread_classifications: {
         Row: {
           action_todos: Json | null
-          category: string
+          category: Database["public"]["Enums"]["thread_category"]
           confidence_score: number
           created_at: string
           id: string
@@ -249,7 +291,7 @@ export type Database = {
         }
         Insert: {
           action_todos?: Json | null
-          category: string
+          category: Database["public"]["Enums"]["thread_category"]
           confidence_score: number
           created_at?: string
           id?: string
@@ -261,7 +303,7 @@ export type Database = {
         }
         Update: {
           action_todos?: Json | null
-          category?: string
+          category?: Database["public"]["Enums"]["thread_category"]
           confidence_score?: number
           created_at?: string
           id?: string
@@ -272,6 +314,20 @@ export type Database = {
           thread_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "thread_classifications_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "active_thread_details"
+            referencedColumns: ["thread_id"]
+          },
+          {
+            foreignKeyName: "thread_classifications_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "categorized_threads"
+            referencedColumns: ["thread_id"]
+          },
           {
             foreignKeyName: "thread_classifications_thread_id_fkey"
             columns: ["thread_id"]
@@ -319,7 +375,37 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      active_thread_details: {
+        Row: {
+          account_email: string | null
+          account_id: string | null
+          action_todos: Json | null
+          category: Database["public"]["Enums"]["thread_category"] | null
+          confidence_score: number | null
+          emails: Json | null
+          scheduling_todos: Json | null
+          summary_points: string[] | null
+          thread_id: string | null
+          thread_subject: string | null
+        }
+        Relationships: []
+      }
+      categorized_threads: {
+        Row: {
+          account_email: string | null
+          account_id: string | null
+          action_todos: Json | null
+          category: Database["public"]["Enums"]["thread_category"] | null
+          confidence_score: number | null
+          emails: Json | null
+          last_message_at: string | null
+          scheduling_todos: Json | null
+          summary_points: string[] | null
+          thread_id: string | null
+          thread_subject: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       handle_google_auth: {
@@ -350,6 +436,14 @@ export type Database = {
         | "NO_ACTION"
         | "TRIGGER_ACTION"
         | "FILTER_OUT"
+      thread_category:
+        | "ACTIVE_DISCUSSION"
+        | "PASSIVE_DISCUSSION"
+        | "NOTIFICATION"
+        | "MEETING"
+        | "NEWSLETTER"
+        | "NOT_RELEVANT"
+        | "MARKETING"
       thread_type:
         | "DISCUSSION_ACTIVE"
         | "DISCUSSION_PASSIVE"
