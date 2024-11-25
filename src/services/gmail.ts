@@ -236,14 +236,20 @@ export class GmailService {
   }
 
   private async updateSyncState(accountId: string, historyId: string) {
-    console.log(`Updating sync state for account ID: ${accountId}`);
-    await retryWithBackoff(() =>
+    console.log(`Updating sync state for account ${accountId} with historyId ${historyId}`);
+    const { data, error } = await retryWithBackoff(() =>
       this.supabase.from("email_sync_states").upsert({
         account_id: accountId,
         last_history_id: historyId,
         last_sync_at: new Date().toISOString(),
-      }),
+      })
     );
+    
+    if (error) {
+      console.error('Failed to update sync state:', error);
+    } else {
+      console.log('Successfully updated sync state:', data);
+    }
   }
 
   async syncNewAccount(email: string, daysToSync: number, metrics: SyncMetrics) {
