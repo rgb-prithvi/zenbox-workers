@@ -6,6 +6,23 @@ import { retryWithBackoff } from "../utils/retry";
 
 type EmailAccount = Database["public"]["Tables"]["email_accounts"]["Row"];
 type Email = Database["public"]["Tables"]["emails"]["Insert"];
+type GmailSystemLabel = Database["public"]["Enums"]["gmail_system_label"];
+
+const GMAIL_SYSTEM_LABELS: Record<string, GmailSystemLabel> = {
+  INBOX: 'INBOX',
+  SENT: 'SENT',
+  DRAFT: 'DRAFT',
+  SPAM: 'SPAM',
+  TRASH: 'TRASH',
+  STARRED: 'STARRED',
+  IMPORTANT: 'IMPORTANT',
+  UNREAD: 'UNREAD',
+  CATEGORY_PERSONAL: 'CATEGORY_PERSONAL',
+  CATEGORY_SOCIAL: 'CATEGORY_SOCIAL',
+  CATEGORY_PROMOTIONS: 'CATEGORY_PROMOTIONS',
+  CATEGORY_UPDATES: 'CATEGORY_UPDATES',
+  CATEGORY_FORUMS: 'CATEGORY_FORUMS'
+};
 
 export class GmailService {
   private oauth2Client;
@@ -177,12 +194,24 @@ export class GmailService {
 
   private async storeThread(accountId: string, thread: any) {
     const subject = this.getHeaderValue(thread.messages[0], "Subject") || '(no subject)';
-    console.log(`Storing thread "${subject}" for account ID: ${accountId}`);
+    const labels = thread.messages[0].labelIds || [];
     
+    // Log the source
+    const source = labels.find(label => 
+      [GMAIL_SYSTEM_LABELS.INBOX, GMAIL_SYSTEM_LABELS.SENT, GMAIL_SYSTEM_LABELS.DRAFT].includes(label as GmailSystemLabel)
+    ) || 'OTHER';
+    console.log(`Storing thread "${subject}" from ${source} for account ID: ${accountId}`);
+
+    // Filter out unwanted messages
+    if ([GMAIL_SYSTEM_LABELS.DRAFT, GMAIL_SYSTEM_LABELS.SPAM, GMAIL_SYSTEM_LABELS.TRASH].includes(source as GmailSystemLabel)) {
+      console.log(`Skipping ${source} thread "${subject}"`);
+      return 0;
+    }
+
     const messages = thread.messages || [];
     if (!messages.length) {
       console.log(`Thread "${subject}" has no messages, skipping storage.`);
-      return 0; // Return 0 emails processed
+      return 0;
     }
 
     const lastMessage = messages[messages.length - 1];
@@ -195,7 +224,7 @@ export class GmailService {
         received_at: threadDate.toISOString(),
       },
       participants: this.extractParticipants(messages),
-      unread_count: messages.filter((m: any) => m.labelIds?.includes("UNREAD")).length,
+      unread_count: messages.filter((m: any) => m.labelIds?.includes(GMAIL_SYSTEM_LABELS.UNREAD)).length,
     };
 
     // Store thread
@@ -218,6 +247,12 @@ export class GmailService {
       messages.map(async (message: any) => {
         const messageDate = new Date(parseInt(message.internalDate));
         const bodyContent = this.getEmailBody(message.payload);
+        
+        // Filter and validate labels
+        const validLabels = (message.labelIds || [])
+          .filter((label: string) => label in GMAIL_SYSTEM_LABELS)
+          .map(label => label as keyof typeof GMAIL_SYSTEM_LABELS);
+
         const email = {
           id: message.id,
           thread_id: thread.id,
@@ -226,7 +261,7 @@ export class GmailService {
           to: this.getHeaderValue(message, "To")
             .split(",")
             .map((e: string) => e.trim())
-            .filter(Boolean), // Filter out empty strings
+            .filter(Boolean),
           cc: this.getHeaderValue(message, "Cc")
             .split(",")
             .map((e: string) => e.trim())
@@ -239,11 +274,11 @@ export class GmailService {
           body_html: bodyContent.html,
           body_text: bodyContent.text,
           snippet: message.snippet,
-          is_read: !message.labelIds?.includes("UNREAD"),
+          is_read: !validLabels.includes(GMAIL_SYSTEM_LABELS.UNREAD),
+          labels: validLabels,
           received_at: messageDate.toISOString(),
         };
 
-        // Generate content hash
         const contentHash = await crypto.subtle
           .digest(
             "SHA-256",
@@ -261,7 +296,6 @@ export class GmailService {
     );
 
     let emailsStored = 0;
-    // Process in chunks
     const chunkSize = 100;
     for (let i = 0; i < emailsData.length; i += chunkSize) {
       const chunk = emailsData.slice(i, i + chunkSize);
@@ -269,7 +303,7 @@ export class GmailService {
       try {
         const { error: emailError } = await retryWithBackoff(() =>
           this.supabase.from("emails").upsert(chunk, {
-            onConflict: 'content_hash',
+            onConflict: "content_hash",
             ignoreDuplicates: true,
           }),
         );
@@ -286,7 +320,7 @@ export class GmailService {
     }
 
     console.log(`Completed storing thread "${subject}" with ${emailsStored} emails`);
-    return emailsStored; // Return number of emails successfully stored
+    return emailsStored;
   }
 
   private async updateSyncState(accountId: string, historyId: string) {
