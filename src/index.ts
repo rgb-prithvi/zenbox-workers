@@ -143,25 +143,34 @@ const worker = new Worker<WorkerJobData>(
           if (!classification.is_automated) {
             console.log(`Processing non-automated thread ${thread.id} with LLM...`);
 
-            const { data: latestEmail } = await supabase
+            const { data: threadEmails } = await supabase
               .from("emails")
               .select("*")
               .eq("thread_id", thread.id)
               .order("received_at", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(5); // Increased from 3 to 5 for better batching
 
-            if (latestEmail) {
-              console.log(`Processing email ${latestEmail.id} from thread ${thread.id} with LLM`);
+            if (threadEmails?.length) {
+              const batchSize = 5; // Process 5 emails at once
+              const batches = [];
+              
+              for (let i = 0; i < threadEmails.length; i += batchSize) {
+                batches.push(threadEmails.slice(i, i + batchSize));
+              }
+
+              console.log(`Processing ${threadEmails.length} emails in ${batches.length} batches`);
+              
               try {
-                await llmService.processEmail(latestEmail.id);
-                console.log(`Successfully processed email ${latestEmail.id} with LLM`);
+                await Promise.all(
+                  batches.map(batch => 
+                    llmService.processBatch(batch.map(e => e.id), 3)
+                  )
+                );
+                console.log(`Successfully processed all emails from thread ${thread.id}`);
               } catch (error) {
-                console.error(`LLM processing failed for email ${latestEmail.id}:`, error);
+                console.error(`LLM processing failed for thread ${thread.id}:`, error);
                 metrics.errors++;
               }
-            } else {
-              console.warn(`No emails found for thread ${thread.id} - skipping LLM processing`);
             }
           } else {
             console.log(`Thread ${thread.id} is automated - skipping LLM processing`);

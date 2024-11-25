@@ -288,6 +288,7 @@ export type Database = {
           category: Database["public"]["Enums"]["thread_category"]
           confidence_score: number
           created_at: string
+          email_breakdown: string | null
           id: string
           is_automated: boolean
           reasoning: string
@@ -300,6 +301,7 @@ export type Database = {
           category: Database["public"]["Enums"]["thread_category"]
           confidence_score: number
           created_at?: string
+          email_breakdown?: string | null
           id?: string
           is_automated: boolean
           reasoning: string
@@ -312,6 +314,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["thread_category"]
           confidence_score?: number
           created_at?: string
+          email_breakdown?: string | null
           id?: string
           is_automated?: boolean
           reasoning?: string

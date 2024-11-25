@@ -1,15 +1,25 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 import { generateObject } from "ai";
+import pLimit from "p-limit";
 import { z } from "zod";
 import { Database } from "../types/supabase";
 import SYSTEM_PROMPT from "./prompts";
 
 // Define the response schema using Zod
 const responseSchema = z.object({
+  email_breakdown: z.string().describe("Detailed analysis of the email content"),
   summary_points: z.array(z.string()).describe("Bullet points summarizing the email"),
   category: z
-    .enum(["ACTIVE_DISCUSSION", "PASSIVE_DISCUSSION", "NOTIFICATION", "NOT_RELEVANT"])
+    .enum([
+      "ACTIVE_DISCUSSION",
+      "PASSIVE_DISCUSSION",
+      "NOTIFICATION",
+      "MEETING",
+      "NEWSLETTER",
+      "MARKETING",
+      "NOT_RELEVANT",
+    ])
     .describe("The type of email"),
   confidence_score: z.number().min(0).max(1).describe("Confidence score of the classification"),
   reasoning: z.string().describe("Brief explanation for the classification"),
@@ -40,6 +50,7 @@ export class LLMService {
   private openai;
   private supabase;
   private readonly SYSTEM_PROMPT = SYSTEM_PROMPT;
+  private limit = pLimit(3); // Limit concurrent LLM calls
 
   constructor() {
     this.openai = createOpenAI({
@@ -99,6 +110,7 @@ Body: ${email.body_text || email.body_html}`;
           category: result.category,
           confidence_score: result.confidence_score,
           reasoning: result.reasoning,
+          email_breakdown: result.email_breakdown,
           summary_points: result.summary_points,
           scheduling_todos: result.scheduling_todos || [],
           action_todos: result.action_todos || [],
@@ -110,8 +122,29 @@ Body: ${email.body_text || email.body_html}`;
     }
   }
 
+  async processBatch(emailIds: string[], concurrency: number = 4): Promise<void> {
+    console.log(
+      `Starting batch processing of ${emailIds.length} emails with concurrency ${concurrency}...`,
+    );
+
+    this.limit = pLimit(concurrency);
+    const promises = emailIds.map((emailId) =>
+      this.limit(async () => {
+        try {
+          console.log(`Starting processing of email ${emailId}`);
+          await this.processEmail(emailId);
+          console.log(`✓ Completed email ${emailId}`);
+        } catch (error) {
+          console.error(`✗ Failed email ${emailId}:`, error);
+        }
+      }),
+    );
+
+    await Promise.all(promises);
+    console.log(`Completed batch processing of ${emailIds.length} emails`);
+  }
+
   async processUnclassifiedEmails(batchSize: number = 10): Promise<void> {
-    // Get emails from threads that are not automated and need classification
     const { data: emails, error } = await this.supabase
       .from("emails")
       .select(
@@ -129,12 +162,8 @@ Body: ${email.body_text || email.body_html}`;
 
     console.log(`Processing ${emails?.length || 0} unclassified emails`);
 
-    for (const email of emails || []) {
-      try {
-        await this.processEmail(email.id);
-      } catch (error) {
-        console.error(`Failed to process email ${email.id}:`, error);
-      }
+    if (emails?.length) {
+      await this.processBatch(emails.map((e) => e.id));
     }
   }
 }
