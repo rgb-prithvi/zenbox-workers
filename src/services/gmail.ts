@@ -461,16 +461,29 @@ export class GmailService {
 
   async syncChanges(email: string, metrics: SyncMetrics) {
     console.log(`Starting incremental sync for email: ${email}`);
-    const { data: account, error } = await this.supabase
-      .from("email_accounts")
-      .select("*, email_sync_states!inner(*)")
-      .eq("email", email)
+    
+    // Get the most recent completed sync state for this email
+    const { data: syncState, error: syncError } = await this.supabase
+      .from("email_sync_states")
+      .select("*, email_accounts!inner(email)")
+      .eq("email_accounts.email", email)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false })
+      .limit(1)
       .single();
 
-    if (error) throw new Error(`No account found for ${email}`);
+    if (syncError) throw new Error(`No sync history found for ${email}`);
 
-    const accessToken = await this.setupGmailClient(account);
-    const startHistoryId = account.email_sync_states?.last_history_id;
+    console.log(`Found sync state for account ID: ${syncState.account_id}`);
+    console.log(`Last sync state:`, {
+      lastHistoryId: syncState.last_history_id,
+      lastSyncType: syncState.sync_type,
+      lastSyncStatus: syncState.status,
+      lastSyncTime: syncState.completed_at
+    });
+
+    const accessToken = await this.setupGmailClient(syncState.email_accounts);
+    const startHistoryId = syncState.last_history_id;
 
     if (!startHistoryId) {
       console.log("No history ID found, falling back to full sync");
@@ -490,25 +503,37 @@ export class GmailService {
         return;
       }
 
+      console.log(`Found ${response.history.length} history records`);
+      console.log(`History range: ${startHistoryId} -> ${response.historyId}`);
+
       const threadIds = new Set<string>();
       response.history.forEach((change: any) => {
+        console.log(`Processing history record:`, {
+          id: change.id,
+          messages: change.messages?.length || 0,
+          labelsAdded: change.labelsAdded?.length || 0,
+          labelsRemoved: change.labelsRemoved?.length || 0,
+        });
+        
         change.messages?.forEach((msg: any) => {
           if (msg.threadId) threadIds.add(msg.threadId);
         });
       });
+
+      console.log(`Found ${threadIds.size} unique threads to update`);
 
       for (const threadId of threadIds) {
         const thread = await retryWithBackoff(() =>
           this.gmailRequest(accessToken, `threads/${threadId}`, { format: "full" }),
         );
         if (thread) {
-          await this.storeThread(account.id, thread);
+          await this.storeThread(syncState.account_id, thread);
           metrics.threadsProcessed++;
           metrics.emailsProcessed += thread.messages?.length || 0;
         }
       }
 
-      await this.updateSyncState(account.id, response.historyId);
+      await this.updateSyncState(syncState.account_id, response.historyId);
     } catch (error) {
       if (error instanceof Error && error.message.includes("404")) {
         console.log("History expired, falling back to full sync");

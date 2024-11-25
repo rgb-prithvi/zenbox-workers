@@ -68,14 +68,14 @@ async function main() {
 
   try {
     // Test full sync first
-    await testFullSync();
+    // await testFullSync();
 
     // Wait a bit before testing incremental sync
     // console.log("\nWaiting 5 seconds before testing incremental sync...");
     // await new Promise(resolve => setTimeout(resolve, 5000));
 
     // // Test incremental sync
-    // await testIncrementalSync();
+    await testIncrementalSync();
 
     console.log("\n✨ All tests completed successfully!");
   } catch (error) {
