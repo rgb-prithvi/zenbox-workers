@@ -311,7 +311,7 @@ export class GmailService {
       const chunk = emailsData.slice(i, i + chunkSize);
 
       try {
-        const { error: emailError } = await retryWithBackoff(() =>
+        const { error: emailError } = await retryWithBackoff<{ error: any }>(() =>
           this.supabase.from("emails").upsert(chunk, {
             onConflict: "content_hash",
             ignoreDuplicates: true,
@@ -335,7 +335,10 @@ export class GmailService {
 
   private async updateSyncState(accountId: string, historyId: string) {
     console.log(`Updating sync state for account ${accountId} with historyId ${historyId}`);
-    const { data, error } = await retryWithBackoff(() =>
+    const { data, error } = await retryWithBackoff<{
+      data: any;
+      error: any;
+    }>(() =>
       this.supabase.from("email_sync_states").insert({
         account_id: accountId,
         last_history_id: historyId,

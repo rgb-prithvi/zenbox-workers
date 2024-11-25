@@ -234,18 +234,18 @@ export class EmailClassifier {
       MEETING: 0,
       NEWSLETTER: 0,
       NOT_RELEVANT: 0,
-      MARKETING: 0
+      MARKETING: 0,
     };
 
     // Map category names to pattern keys
     const categoryToPatternMap: Record<ThreadCategory, keyof AutomationIndicators> = {
-      ACTIVE_DISCUSSION: 'body_patterns',
-      PASSIVE_DISCUSSION: 'body_patterns',
-      NOTIFICATION: 'notification_patterns',
-      MEETING: 'meeting_patterns',
-      NEWSLETTER: 'newsletter_patterns',
-      NOT_RELEVANT: 'body_patterns',
-      MARKETING: 'marketing_patterns'
+      ACTIVE_DISCUSSION: "body_patterns",
+      PASSIVE_DISCUSSION: "body_patterns",
+      NOTIFICATION: "notification_patterns",
+      MEETING: "meeting_patterns",
+      NEWSLETTER: "newsletter_patterns",
+      NOT_RELEVANT: "body_patterns",
+      MARKETING: "marketing_patterns",
     };
 
     Object.entries(categoryToPatternMap).forEach(([category, patternKey]) => {
@@ -254,7 +254,7 @@ export class EmailClassifier {
         (count, pattern) =>
           count +
           (new RegExp(pattern, "i").test(subject) || new RegExp(pattern, "i").test(body) ? 1 : 0),
-        0
+        0,
       );
     });
 
@@ -320,7 +320,7 @@ export class EmailClassifier {
 
       if (this.checkNewsletterOverride(emailSubject, emailFrom)) {
         return {
-          category: ThreadCategory.NEWSLETTER,
+          category: "NEWSLETTER" as ThreadCategory,
           confidence: 1.0,
           match_counts: matches,
         };
@@ -374,7 +374,7 @@ export class EmailClassifier {
     const classification: ThreadClassificationInsert = {
       thread_id: threadId,
       is_automated: analysis.is_automated,
-      category: categoryResult?.category ?? "NOTIFICATION" as ThreadCategory,
+      category: categoryResult?.category ?? ("NOTIFICATION" as ThreadCategory),
       confidence_score: categoryResult?.confidence || analysis.automation_confidence,
       reasoning: JSON.stringify({
         matched_patterns: analysis.matched_patterns,

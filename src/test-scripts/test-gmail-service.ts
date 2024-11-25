@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
-import { GmailService } from "./services/gmail";
-import { SyncMetrics } from "./types";
+import { GmailService } from "../services/gmail";
+import { SyncMetrics } from "../types";
 
 dotenv.config();
 

@@ -152,19 +152,21 @@ const worker = new Worker<WorkerJobData>(
 
             if (threadEmails?.length) {
               const batchSize = 5; // Process 5 emails at once
-              const batches = [];
-              
+              const batches: (typeof threadEmails)[] = [];
               for (let i = 0; i < threadEmails.length; i += batchSize) {
                 batches.push(threadEmails.slice(i, i + batchSize));
               }
 
               console.log(`Processing ${threadEmails.length} emails in ${batches.length} batches`);
-              
+
               try {
                 await Promise.all(
-                  batches.map(batch => 
-                    llmService.processBatch(batch.map(e => e.id), 3)
-                  )
+                  batches.map((batch) =>
+                    llmService.processBatch(
+                      batch.map((e) => e.id),
+                      3,
+                    ),
+                  ),
                 );
                 console.log(`Successfully processed all emails from thread ${thread.id}`);
               } catch (error) {
