@@ -465,7 +465,7 @@ export class GmailService {
     // Get the most recent completed sync state for this email
     const { data: syncState, error: syncError } = await this.supabase
       .from("email_sync_states")
-      .select("*, email_accounts!inner(email)")
+      .select("*, email_accounts(*)")
       .eq("email_accounts.email", email)
       .eq("status", "completed")
       .order("completed_at", { ascending: false })
