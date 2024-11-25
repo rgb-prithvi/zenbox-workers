@@ -1,20 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
-import { EmailCategory } from "../types";
 import { Database } from "../types/supabase";
 
 type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
 type ThreadClassificationInsert = Database["public"]["Tables"]["thread_classifications"]["Insert"];
+type ThreadCategory = Database["public"]["Enums"]["thread_category"];
 
 type EmailInput = {
   from: string;
   subject: string;
-  body: string;
+  body_text?: string;
+  body_html?: string;
 };
 
 type CategoryResult = {
-  category: EmailCategory;
+  category: ThreadCategory;
   confidence: number;
-  match_counts: Record<EmailCategory, number>;
+  match_counts: Record<ThreadCategory, number>;
 };
 
 interface AutomationIndicators {
@@ -160,14 +161,14 @@ export class EmailClassifier {
       throw new Error("Email must be an object");
     }
 
-    const requiredFields = ["from", "subject", "body"];
+    const requiredFields = ["from", "subject"];
     if (!requiredFields.every((field) => field in email)) {
       throw new Error(`Email must contain all required fields: ${requiredFields.join(", ")}`);
     }
 
     const emailFrom = String(email.from).trim();
     const emailSubject = String(email.subject).trim();
-    const emailBody = String(email.body).trim();
+    const emailBody = String(email.body_text || email.body_html || "").trim();
 
     try {
       const matched_patterns: Record<string, string[]> = {
@@ -225,17 +226,35 @@ export class EmailClassifier {
     }
   }
 
-  private calculateCategoryMatches(subject: string, body: string): Record<EmailCategory, number> {
-    const matches: Record<EmailCategory, number> = {} as Record<EmailCategory, number>;
+  private calculateCategoryMatches(subject: string, body: string): Record<ThreadCategory, number> {
+    const matches: Record<ThreadCategory, number> = {
+      ACTIVE_DISCUSSION: 0,
+      PASSIVE_DISCUSSION: 0,
+      NOTIFICATION: 0,
+      MEETING: 0,
+      NEWSLETTER: 0,
+      NOT_RELEVANT: 0,
+      MARKETING: 0
+    };
 
-    Object.values(EmailCategory).forEach((category) => {
-      const patterns =
-        this.indicators[`${category.toLowerCase()}_patterns` as keyof AutomationIndicators];
-      matches[category as EmailCategory] = patterns.reduce(
+    // Map category names to pattern keys
+    const categoryToPatternMap: Record<ThreadCategory, keyof AutomationIndicators> = {
+      ACTIVE_DISCUSSION: 'body_patterns',
+      PASSIVE_DISCUSSION: 'body_patterns',
+      NOTIFICATION: 'notification_patterns',
+      MEETING: 'meeting_patterns',
+      NEWSLETTER: 'newsletter_patterns',
+      NOT_RELEVANT: 'body_patterns',
+      MARKETING: 'marketing_patterns'
+    };
+
+    Object.entries(categoryToPatternMap).forEach(([category, patternKey]) => {
+      const patterns = this.indicators[patternKey];
+      matches[category as ThreadCategory] = patterns.reduce(
         (count, pattern) =>
           count +
           (new RegExp(pattern, "i").test(subject) || new RegExp(pattern, "i").test(body) ? 1 : 0),
-        0,
+        0
       );
     });
 
@@ -248,15 +267,15 @@ export class EmailClassifier {
     );
   }
 
-  private determineCategory(matches: Record<EmailCategory, number>): [EmailCategory, number] {
+  private determineCategory(matches: Record<ThreadCategory, number>): [ThreadCategory, number] {
     const max_matches = Math.max(...Object.values(matches));
     if (max_matches === 0) {
-      return [EmailCategory.NOTIFICATION, 0.5]; // Default with low confidence
+      return ["NOTIFICATION" as ThreadCategory, 0.5]; // Default with low confidence
     }
 
     const winners = Object.entries(matches)
       .filter(([_, count]) => count === max_matches)
-      .map(([category]) => category as EmailCategory);
+      .map(([category]) => category as ThreadCategory);
 
     if (winners.length === 1) {
       const total_matches = Object.values(matches).reduce((a, b) => a + b, 0);
@@ -264,7 +283,8 @@ export class EmailClassifier {
       return [winners[0], confidence];
     }
 
-    return [EmailCategory.NOTIFICATION, 0.3];
+    // If multiple categories have the same number of matches, default to NOTIFICATION
+    return ["NOTIFICATION" as ThreadCategory, 0.5];
   }
 
   private calculateAutomationConfidence(
@@ -294,13 +314,13 @@ export class EmailClassifier {
 
       const emailFrom = String(email.from).trim();
       const emailSubject = String(email.subject).trim();
-      const emailBody = String(email.body).trim();
+      const emailBody = String(email.body_text || email.body_html || "").trim();
 
       const matches = this.calculateCategoryMatches(emailSubject, emailBody);
 
       if (this.checkNewsletterOverride(emailSubject, emailFrom)) {
         return {
-          category: EmailCategory.NEWSLETTER,
+          category: ThreadCategory.NEWSLETTER,
           confidence: 1.0,
           match_counts: matches,
         };
@@ -333,7 +353,8 @@ export class EmailClassifier {
     const analysis = this.analyzeEmail({
       from: latestEmail.from,
       subject: latestEmail.subject || "",
-      body: latestEmail.body || "",
+      body_text: latestEmail.body_text || "",
+      body_html: latestEmail.body_html || "",
     });
 
     let categoryResult: CategoryResult | null = null;
@@ -342,7 +363,8 @@ export class EmailClassifier {
         {
           from: latestEmail.from,
           subject: latestEmail.subject || "",
-          body: latestEmail.body || "",
+          body_text: latestEmail.body_text || "",
+          body_html: latestEmail.body_html || "",
         },
         true,
       );
@@ -352,7 +374,7 @@ export class EmailClassifier {
     const classification: ThreadClassificationInsert = {
       thread_id: threadId,
       is_automated: analysis.is_automated,
-      category: categoryResult?.category ?? EmailCategory.NOTIFICATION,
+      category: categoryResult?.category ?? "NOTIFICATION" as ThreadCategory,
       confidence_score: categoryResult?.confidence || analysis.automation_confidence,
       reasoning: JSON.stringify({
         matched_patterns: analysis.matched_patterns,

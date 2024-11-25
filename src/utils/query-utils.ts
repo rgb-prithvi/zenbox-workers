@@ -8,7 +8,8 @@ type EmailThread = {
     id: string;
     from: string;
     subject: string;
-    body: string;
+    body_text: string;
+    body_html: string;
     received_at: string;
   }[];
 };
@@ -71,7 +72,8 @@ export async function getUnclassifiedThreads(
           id,
           from,
           subject,
-          body,
+          body_text,
+          body_html,
           received_at
         )
       `,

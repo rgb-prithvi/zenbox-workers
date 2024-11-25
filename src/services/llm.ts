@@ -67,7 +67,7 @@ export class LLMService {
 To: ${email.to?.join(", ")}
 Subject: ${email.subject}
 Date: ${new Date(email.received_at).toISOString()}
-Body: ${email.body}`;
+Body: ${email.body_text || email.body_html}`;
   }
 
   async processEmail(emailId: string): Promise<void> {
