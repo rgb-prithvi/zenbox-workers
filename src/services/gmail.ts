@@ -5,7 +5,6 @@ import { Database } from "../types/supabase";
 import { retryWithBackoff } from "../utils/retry";
 
 type EmailAccount = Database["public"]["Tables"]["email_accounts"]["Row"];
-type EmailThread = Database["public"]["Tables"]["email_threads"]["Insert"];
 type Email = Database["public"]["Tables"]["emails"]["Insert"];
 
 export class GmailService {
@@ -132,31 +131,58 @@ export class GmailService {
     return Array.from(participants);
   }
 
-  private getEmailBody(payload: any): string {
-    if (!payload) return "";
+  private getEmailBody(payload: any): { html: string | null; text: string | null } {
+    if (!payload) return { html: null, text: null };
 
-    if (payload.body?.data) {
-      return atob(payload.body.data.replace(/-/g, "+").replace(/_/g, "/"));
-    }
+    let htmlContent: string | null = null;
+    let textContent: string | null = null;
 
-    if (payload.parts) {
-      for (const part of payload.parts) {
-        if (part.mimeType === "text/plain" || part.mimeType === "text/html") {
-          const body = this.getEmailBody(part);
-          if (body) return body;
+    // Helper function to decode base64
+    const decodeBase64 = (data: string): string => {
+      // Replace URL-safe chars and add padding if needed
+      const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
+      const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+
+      // Decode using TextDecoder to properly handle UTF-8
+      const rawData = atob(base64 + padding);
+      const decoder = new TextDecoder("utf-8");
+      const bytes = new Uint8Array(rawData.length);
+
+      for (let i = 0; i < rawData.length; i++) {
+        bytes[i] = rawData.charCodeAt(i);
+      }
+
+      return decoder.decode(bytes);
+    };
+
+    const processPayloadPart = (part: any) => {
+      if (part.body?.data) {
+        const content = decodeBase64(part.body.data);
+        if (part.mimeType === "text/html") {
+          htmlContent = content;
+        } else if (part.mimeType === "text/plain") {
+          textContent = content;
         }
       }
-    }
 
-    return "";
+      if (part.parts) {
+        part.parts.forEach(processPayloadPart);
+      }
+    };
+
+    processPayloadPart(payload);
+
+    return { html: htmlContent, text: textContent };
   }
 
   private async storeThread(accountId: string, thread: any) {
-    console.log(`Storing thread ${thread.id} for account ID: ${accountId}`);
+    const subject = this.getHeaderValue(thread.messages[0], "Subject") || '(no subject)';
+    console.log(`Storing thread "${subject}" for account ID: ${accountId}`);
+    
     const messages = thread.messages || [];
     if (!messages.length) {
-      console.log(`Thread ${thread.id} has no messages, skipping storage.`);
-      return;
+      console.log(`Thread "${subject}" has no messages, skipping storage.`);
+      return 0; // Return 0 emails processed
     }
 
     const lastMessage = messages[messages.length - 1];
@@ -173,7 +199,7 @@ export class GmailService {
     };
 
     // Store thread
-    await this.supabase.from("email_threads").upsert({
+    const { error: threadError } = await this.supabase.from("email_threads").upsert({
       id: thread.id,
       account_id: accountId,
       subject: this.getHeaderValue(lastMessage, "Subject"),
@@ -182,73 +208,105 @@ export class GmailService {
       thread_summary: threadSummary,
     });
 
+    if (threadError) {
+      console.error(`Error storing thread "${subject}":`, threadError);
+      return 0;
+    }
+
     // Create emails with content hashes
-    const emailsData: Email[] = await Promise.all(messages.map(async (message: any) => {
-      const messageDate = new Date(parseInt(message.internalDate));
-      const email = {
-        id: message.id,
-        thread_id: thread.id,
-        account_id: accountId,
-        from: this.getHeaderValue(message, "From"),
-        to: this.getHeaderValue(message, "To").split(",").map((e: string) => e.trim()),
-        cc: this.getHeaderValue(message, "Cc").split(",").map((e: string) => e.trim()),
-        bcc: this.getHeaderValue(message, "Bcc").split(",").map((e: string) => e.trim()),
-        subject: this.getHeaderValue(message, "Subject"),
-        body: this.getEmailBody(message.payload),
-        snippet: message.snippet,
-        is_read: !message.labelIds?.includes("UNREAD"),
-        received_at: messageDate.toISOString(),
-      };
+    const emailsData: Email[] = await Promise.all(
+      messages.map(async (message: any) => {
+        const messageDate = new Date(parseInt(message.internalDate));
+        const bodyContent = this.getEmailBody(message.payload);
+        const email = {
+          id: message.id,
+          thread_id: thread.id,
+          account_id: accountId,
+          from: this.getHeaderValue(message, "From"),
+          to: this.getHeaderValue(message, "To")
+            .split(",")
+            .map((e: string) => e.trim())
+            .filter(Boolean), // Filter out empty strings
+          cc: this.getHeaderValue(message, "Cc")
+            .split(",")
+            .map((e: string) => e.trim())
+            .filter(Boolean),
+          bcc: this.getHeaderValue(message, "Bcc")
+            .split(",")
+            .map((e: string) => e.trim())
+            .filter(Boolean),
+          subject: this.getHeaderValue(message, "Subject"),
+          body_html: bodyContent.html,
+          body_text: bodyContent.text,
+          snippet: message.snippet,
+          is_read: !message.labelIds?.includes("UNREAD"),
+          received_at: messageDate.toISOString(),
+        };
 
-      // Generate content hash
-      const contentHash = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(
-          `${email.subject}|${email.from}|${email.body}|${email.received_at}`
-        )
-      ).then(hash => Buffer.from(hash).toString("hex"));
+        // Generate content hash
+        const contentHash = await crypto.subtle
+          .digest(
+            "SHA-256",
+            new TextEncoder().encode(
+              `${email.subject}|${email.from}|${email.body_html}|${email.received_at}`,
+            ),
+          )
+          .then((hash) => Buffer.from(hash).toString("hex"));
 
-      return {
-        ...email,
-        content_hash: contentHash
-      };
-    }));
+        return {
+          ...email,
+          content_hash: contentHash,
+        };
+      }),
+    );
 
+    let emailsStored = 0;
     // Process in chunks
     const chunkSize = 100;
     for (let i = 0; i < emailsData.length; i += chunkSize) {
       const chunk = emailsData.slice(i, i + chunkSize);
-      
+
       try {
-        // Attempt to insert all records - duplicates will fail due to unique constraint
-        await retryWithBackoff(() => 
-          this.supabase
-            .from("emails")
-            .upsert(chunk, { 
-              onConflict: 'content_hash',  // Specify the conflict column
-              ignoreDuplicates: true       // Skip records that would violate the constraint
-            })
+        const { error: emailError } = await retryWithBackoff(() =>
+          this.supabase.from("emails").upsert(chunk, {
+            onConflict: 'content_hash',
+            ignoreDuplicates: true,
+          }),
         );
+
+        if (emailError) {
+          console.error(`Error storing emails for thread "${subject}":`, emailError);
+        } else {
+          emailsStored += chunk.length;
+          console.log(`Stored ${chunk.length} emails for thread "${subject}"`);
+        }
       } catch (error) {
-        console.warn(`Some emails were skipped due to duplicates in thread ${thread.id}`);
+        console.warn(`Some emails were skipped due to duplicates in thread "${subject}"`);
       }
     }
+
+    console.log(`Completed storing thread "${subject}" with ${emailsStored} emails`);
+    return emailsStored; // Return number of emails successfully stored
   }
 
   private async updateSyncState(accountId: string, historyId: string) {
     console.log(`Updating sync state for account ${accountId} with historyId ${historyId}`);
     const { data, error } = await retryWithBackoff(() =>
-      this.supabase.from("email_sync_states").upsert({
+      this.supabase.from("email_sync_states").insert({
         account_id: accountId,
         last_history_id: historyId,
-        last_sync_at: new Date().toISOString(),
-      })
+        sync_type: 'incremental',
+        status: 'in_progress',
+        emails_synced: 0,
+        threads_synced: 0,
+        started_at: new Date().toISOString(),
+      }),
     );
-    
+
     if (error) {
-      console.error('Failed to update sync state:', error);
+      console.error("Failed to create sync state:", error);
     } else {
-      console.log('Successfully updated sync state:', data);
+      console.log("Successfully created sync state:", data);
     }
   }
 
@@ -262,10 +320,32 @@ export class GmailService {
 
     if (error) throw new Error(`No account found for ${email}`);
 
+    // Create initial sync state
+    const { data: syncState, error: syncStateError } = await this.supabase
+      .from("email_sync_states")
+      .insert({
+        account_id: account.id,
+        sync_type: 'full',
+        status: 'in_progress',
+        started_at: new Date().toISOString(),
+        emails_synced: 0,
+        threads_synced: 0
+      })
+      .select()
+      .single();
+
+    if (syncStateError) {
+      console.error("Failed to create sync state:", syncStateError);
+      throw syncStateError;
+    }
+
     const accessToken = await this.setupGmailClient(account);
     let pageToken: string | undefined;
 
     try {
+      let emailsSynced = 0;
+      let threadsSynced = 0;
+      
       do {
         console.log(
           `Fetching messages for account: ${email}, pageToken: ${pageToken || "initial"}`,
@@ -290,22 +370,55 @@ export class GmailService {
 
         for (const thread of fetchedThreads) {
           if (thread) {
-            await this.storeThread(account.id, thread);
+            const emailsStored = await this.storeThread(account.id, thread);
             metrics.threadsProcessed++;
-            metrics.emailsProcessed += thread.messages?.length || 0;
+            metrics.emailsProcessed += emailsStored;
+            threadsSynced++;
+            emailsSynced += emailsStored;
           }
         }
 
         pageToken = response.nextPageToken;
+        
+        // Update sync state periodically
+        await this.supabase
+          .from("email_sync_states")
+          .update({
+            emails_synced: emailsSynced,
+            threads_synced: threadsSynced
+          })
+          .eq('id', syncState.id);
 
         if (pageToken) {
-          await new Promise((r) => setTimeout(r, 1000)); // Rate limiting
+          await new Promise((r) => setTimeout(r, 1000));
         }
       } while (pageToken);
 
       const profile = await this.gmailRequest(accessToken, "profile", {});
-      await this.updateSyncState(account.id, profile.historyId);
+      
+      // Update final sync state
+      await this.supabase
+        .from("email_sync_states")
+        .update({
+          last_history_id: profile.historyId,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          emails_synced: emailsSynced,
+          threads_synced: threadsSynced
+        })
+        .eq('id', syncState.id);
+
     } catch (error) {
+      // Update sync state with error
+      await this.supabase
+        .from("email_sync_states")
+        .update({
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', syncState.id);
+
       metrics.errors++;
       console.error(`Error syncing new account for email: ${email}`, error);
       throw error;

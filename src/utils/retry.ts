@@ -1,21 +1,21 @@
 export async function retryWithBackoff<T>(
-  fn: () => Promise<T>, 
-  retries: number = 3
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  initialDelay = 1000
 ): Promise<T> {
-  let attempt = 0;
-  let delay = 1000; // 1 second
+  let retries = 0;
+  let delay = initialDelay;
 
-  while (attempt < retries) {
+  while (true) {
     try {
       return await fn();
     } catch (error) {
-      attempt++;
-      if (attempt >= retries) throw error;
-      console.warn(`Retry attempt ${attempt} after failure:`, error);
+      if (retries >= maxRetries) {
+        throw error;
+      }
+      retries++;
       await new Promise(resolve => setTimeout(resolve, delay));
       delay *= 2; // exponential backoff
     }
   }
-
-  throw new Error('Retry failed');
 } 
