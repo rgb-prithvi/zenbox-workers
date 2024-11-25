@@ -1,12 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import dotenv from "dotenv";
 import http from "http";
 import { logRedisConnection, redisConnection, redisUrl } from "./config/redis";
-import { getUnclassifiedThreads } from "./query-utils";
 import { EmailClassifier } from "./services/classifier";
 import { GmailService } from "./services/gmail";
+import { LLMService } from "./services/llm";
 import { SyncMetrics, WorkerJobData } from "./types";
+import { getUnclassifiedThreads } from "./utils/query-utils";
 
 dotenv.config();
 
@@ -47,8 +48,6 @@ server.listen(PORT, () => {
 // Add LLM queue setup
 logRedisConnection();
 
-const llmQueue = new Queue("llm-processing", { connection: redisConnection });
-
 const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
@@ -78,6 +77,7 @@ const worker = new Worker<WorkerJobData>(
 
       const gmailService = new GmailService();
       const classifier = new EmailClassifier();
+      const llmService = new LLMService();
 
       const metrics: SyncMetrics = {
         startTime: Date.now(),
@@ -139,11 +139,10 @@ const worker = new Worker<WorkerJobData>(
             `Classification result: ${classification.is_automated ? "Automated" : "Not Automated"}`,
           );
 
-          // If thread is not automated, queue it for LLM processing
+          // If thread is not automated, process immediately
           if (!classification.is_automated) {
-            console.log(`Thread ${thread.id} requires LLM processing - queuing...`);
+            console.log(`Processing non-automated thread ${thread.id} with LLM...`);
 
-            // Get the latest email from the thread
             const { data: latestEmail } = await supabase
               .from("emails")
               .select("*")
@@ -153,26 +152,14 @@ const worker = new Worker<WorkerJobData>(
               .single();
 
             if (latestEmail) {
-              console.log(
-                `Queueing LLM processing for email ${latestEmail.id} from thread ${thread.id}`,
-              );
-              await llmQueue.add(
-                `llm-${latestEmail.id}`,
-                {
-                  email_id: latestEmail.id,
-                  thread_id: thread.id,
-                  account_id: emailAccount.id,
-                  classification_id: classification.id,
-                },
-                {
-                  attempts: 3,
-                  backoff: {
-                    type: "exponential",
-                    delay: 1000,
-                  },
-                },
-              );
-              console.log(`Successfully queued email ${latestEmail.id} for LLM processing`);
+              console.log(`Processing email ${latestEmail.id} from thread ${thread.id} with LLM`);
+              try {
+                await llmService.processEmail(latestEmail.id);
+                console.log(`Successfully processed email ${latestEmail.id} with LLM`);
+              } catch (error) {
+                console.error(`LLM processing failed for email ${latestEmail.id}:`, error);
+                metrics.errors++;
+              }
             } else {
               console.warn(`No emails found for thread ${thread.id} - skipping LLM processing`);
             }

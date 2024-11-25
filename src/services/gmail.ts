@@ -5,23 +5,25 @@ import { Database } from "../types/supabase";
 import { retryWithBackoff } from "../utils/retry";
 
 type EmailAccount = Database["public"]["Tables"]["email_accounts"]["Row"];
-type Email = Database["public"]["Tables"]["emails"]["Insert"];
+type Email = Database["public"]["Tables"]["emails"]["Row"];
+type EmailThread = Database["public"]["Tables"]["email_threads"]["Row"];
+type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
 type GmailSystemLabel = Database["public"]["Enums"]["gmail_system_label"];
 
 const GMAIL_SYSTEM_LABELS: Record<string, GmailSystemLabel> = {
-  INBOX: 'INBOX',
-  SENT: 'SENT',
-  DRAFT: 'DRAFT',
-  SPAM: 'SPAM',
-  TRASH: 'TRASH',
-  STARRED: 'STARRED',
-  IMPORTANT: 'IMPORTANT',
-  UNREAD: 'UNREAD',
-  CATEGORY_PERSONAL: 'CATEGORY_PERSONAL',
-  CATEGORY_SOCIAL: 'CATEGORY_SOCIAL',
-  CATEGORY_PROMOTIONS: 'CATEGORY_PROMOTIONS',
-  CATEGORY_UPDATES: 'CATEGORY_UPDATES',
-  CATEGORY_FORUMS: 'CATEGORY_FORUMS'
+  INBOX: "INBOX",
+  SENT: "SENT",
+  DRAFT: "DRAFT",
+  SPAM: "SPAM",
+  TRASH: "TRASH",
+  STARRED: "STARRED",
+  IMPORTANT: "IMPORTANT",
+  UNREAD: "UNREAD",
+  CATEGORY_PERSONAL: "CATEGORY_PERSONAL",
+  CATEGORY_SOCIAL: "CATEGORY_SOCIAL",
+  CATEGORY_PROMOTIONS: "CATEGORY_PROMOTIONS",
+  CATEGORY_UPDATES: "CATEGORY_UPDATES",
+  CATEGORY_FORUMS: "CATEGORY_FORUMS",
 };
 
 export class GmailService {
@@ -193,17 +195,24 @@ export class GmailService {
   }
 
   private async storeThread(accountId: string, thread: any) {
-    const subject = this.getHeaderValue(thread.messages[0], "Subject") || '(no subject)';
+    const subject = this.getHeaderValue(thread.messages[0], "Subject") || "(no subject)";
     const labels = thread.messages[0].labelIds || [];
-    
+
     // Log the source
-    const source = labels.find(label => 
-      [GMAIL_SYSTEM_LABELS.INBOX, GMAIL_SYSTEM_LABELS.SENT, GMAIL_SYSTEM_LABELS.DRAFT].includes(label as GmailSystemLabel)
-    ) || 'OTHER';
+    const source =
+      labels.find((label) =>
+        [GMAIL_SYSTEM_LABELS.INBOX, GMAIL_SYSTEM_LABELS.SENT, GMAIL_SYSTEM_LABELS.DRAFT].includes(
+          label as GmailSystemLabel,
+        ),
+      ) || "OTHER";
     console.log(`Storing thread "${subject}" from ${source} for account ID: ${accountId}`);
 
     // Filter out unwanted messages
-    if ([GMAIL_SYSTEM_LABELS.DRAFT, GMAIL_SYSTEM_LABELS.SPAM, GMAIL_SYSTEM_LABELS.TRASH].includes(source as GmailSystemLabel)) {
+    if (
+      [GMAIL_SYSTEM_LABELS.DRAFT, GMAIL_SYSTEM_LABELS.SPAM, GMAIL_SYSTEM_LABELS.TRASH].includes(
+        source as GmailSystemLabel,
+      )
+    ) {
       console.log(`Skipping ${source} thread "${subject}"`);
       return 0;
     }
@@ -224,7 +233,8 @@ export class GmailService {
         received_at: threadDate.toISOString(),
       },
       participants: this.extractParticipants(messages),
-      unread_count: messages.filter((m: any) => m.labelIds?.includes(GMAIL_SYSTEM_LABELS.UNREAD)).length,
+      unread_count: messages.filter((m: any) => m.labelIds?.includes(GMAIL_SYSTEM_LABELS.UNREAD))
+        .length,
     };
 
     // Store thread
@@ -247,11 +257,11 @@ export class GmailService {
       messages.map(async (message: any) => {
         const messageDate = new Date(parseInt(message.internalDate));
         const bodyContent = this.getEmailBody(message.payload);
-        
+
         // Filter and validate labels
         const validLabels = (message.labelIds || [])
           .filter((label: string) => label in GMAIL_SYSTEM_LABELS)
-          .map(label => label as keyof typeof GMAIL_SYSTEM_LABELS);
+          .map((label) => label as keyof typeof GMAIL_SYSTEM_LABELS);
 
         const email = {
           id: message.id,
@@ -329,8 +339,8 @@ export class GmailService {
       this.supabase.from("email_sync_states").insert({
         account_id: accountId,
         last_history_id: historyId,
-        sync_type: 'incremental',
-        status: 'in_progress',
+        sync_type: "incremental",
+        status: "in_progress",
         emails_synced: 0,
         threads_synced: 0,
         started_at: new Date().toISOString(),
@@ -359,11 +369,11 @@ export class GmailService {
       .from("email_sync_states")
       .insert({
         account_id: account.id,
-        sync_type: 'full',
-        status: 'in_progress',
+        sync_type: "full",
+        status: "in_progress",
         started_at: new Date().toISOString(),
         emails_synced: 0,
-        threads_synced: 0
+        threads_synced: 0,
       })
       .select()
       .single();
@@ -379,7 +389,7 @@ export class GmailService {
     try {
       let emailsSynced = 0;
       let threadsSynced = 0;
-      
+
       do {
         console.log(
           `Fetching messages for account: ${email}, pageToken: ${pageToken || "initial"}`,
@@ -413,15 +423,15 @@ export class GmailService {
         }
 
         pageToken = response.nextPageToken;
-        
+
         // Update sync state periodically
         await this.supabase
           .from("email_sync_states")
           .update({
             emails_synced: emailsSynced,
-            threads_synced: threadsSynced
+            threads_synced: threadsSynced,
           })
-          .eq('id', syncState.id);
+          .eq("id", syncState.id);
 
         if (pageToken) {
           await new Promise((r) => setTimeout(r, 1000));
@@ -429,29 +439,28 @@ export class GmailService {
       } while (pageToken);
 
       const profile = await this.gmailRequest(accessToken, "profile", {});
-      
+
       // Update final sync state
       await this.supabase
         .from("email_sync_states")
         .update({
           last_history_id: profile.historyId,
-          status: 'completed',
+          status: "completed",
           completed_at: new Date().toISOString(),
           emails_synced: emailsSynced,
-          threads_synced: threadsSynced
+          threads_synced: threadsSynced,
         })
-        .eq('id', syncState.id);
-
+        .eq("id", syncState.id);
     } catch (error) {
       // Update sync state with error
       await this.supabase
         .from("email_sync_states")
         .update({
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error',
-          completed_at: new Date().toISOString()
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+          completed_at: new Date().toISOString(),
         })
-        .eq('id', syncState.id);
+        .eq("id", syncState.id);
 
       metrics.errors++;
       console.error(`Error syncing new account for email: ${email}`, error);
@@ -461,7 +470,7 @@ export class GmailService {
 
   async syncChanges(email: string, metrics: SyncMetrics) {
     console.log(`Starting incremental sync for email: ${email}`);
-    
+
     // Get the most recent completed sync state for this email
     const { data: syncState, error: syncError } = await this.supabase
       .from("email_sync_states")
@@ -479,7 +488,7 @@ export class GmailService {
       lastHistoryId: syncState.last_history_id,
       lastSyncType: syncState.sync_type,
       lastSyncStatus: syncState.status,
-      lastSyncTime: syncState.completed_at
+      lastSyncTime: syncState.completed_at,
     });
 
     const accessToken = await this.setupGmailClient(syncState.email_accounts);
@@ -514,7 +523,7 @@ export class GmailService {
           labelsAdded: change.labelsAdded?.length || 0,
           labelsRemoved: change.labelsRemoved?.length || 0,
         });
-        
+
         change.messages?.forEach((msg: any) => {
           if (msg.threadId) threadIds.add(msg.threadId);
         });
