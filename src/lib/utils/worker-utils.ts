@@ -1,3 +1,5 @@
+export const isProduction = process.env.NODE_ENV === "production";
+
 export const checkEnvironmentVariables = () => {
   const requiredEnvVars = [
     "GMAIL_CLIENT_ID",

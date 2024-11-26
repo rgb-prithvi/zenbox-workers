@@ -1,3 +1,4 @@
+import { isProduction } from "@/lib/utils/worker-utils";
 import { ConnectionOptions } from "bullmq";
 import dotenv from "dotenv";
 
@@ -7,23 +8,24 @@ if (!process.env.UPSTASH_REDIS_URL || !process.env.UPSTASH_REDIS_TOKEN) {
   throw new Error("Missing required Redis environment variables");
 }
 
-export const redisUrl = new URL(process.env.UPSTASH_REDIS_URL);
+export const redisUrl = isProduction
+  ? new URL(process.env.UPSTASH_REDIS_URL)
+  : new URL("redis://localhost:6379");
 
-export const redisConnection: ConnectionOptions = {
-  host: process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
-  port: 6379,
-  ...(process.env.NODE_ENV === "production" && {
-    password: process.env.UPSTASH_REDIS_TOKEN,
-    tls: {
-      rejectUnauthorized: false,
-    },
-  }),
+const PORT = 6379;
+
+const devRedisConfig = {
+  host: "localhost",
+  port: PORT,
 };
 
-// Helper function to log connection details
-export function logRedisConnection() {
-  console.log(
-    "Connecting to Redis:",
-    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
-  );
-}
+const prodRedisConfig = {
+  host: redisUrl.hostname,
+  port: PORT,
+  password: process.env.UPSTASH_REDIS_TOKEN,
+  tls: {
+    rejectUnauthorized: false,
+  },
+};
+
+export const redisConnection: ConnectionOptions = isProduction ? prodRedisConfig : devRedisConfig;

@@ -1,4 +1,4 @@
-import { logRedisConnection, redisConnection, redisUrl } from "@/lib/config/redis";
+import { redisConnection, redisUrl } from "@/lib/config/redis";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
 import { getUnclassifiedThreads } from "@/lib/utils/query-utils";
 import { checkEnvironmentVariables } from "@/lib/utils/worker-utils";
@@ -37,14 +37,8 @@ const server = http.createServer((req, res) => {
 const HEALTH_CHECK_PORT = 8080;
 server.listen(HEALTH_CHECK_PORT, () => {
   console.log(`Health check server listening on port ${HEALTH_CHECK_PORT}`);
-  console.log(
-    "Worker started with connection to:",
-    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost", // TODO: Fix this Redis URL connection logic -- kinda jank
-  );
+  console.log(`Worker started with connection to: ${redisUrl.hostname}`);
 });
-
-// TODO: Fix this Redis URL connection logic -- kinda jank
-logRedisConnection();
 
 // TODO: Add consistency to sync type
 const worker = new Worker<WorkerJobData>(
