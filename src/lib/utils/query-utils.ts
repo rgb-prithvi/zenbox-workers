@@ -1,31 +1,13 @@
 import { supabase } from "@/lib/supabase-client";
+import type { Database } from "@/lib/types/supabase";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { retryWithBackoff } from "./retry";
 
-// TODO: Use Supabase schema types and move this stuff to dedicated types file
-type EmailThread = {
-  id: string;
-  subject: string;
-  thread_summary: any;
-  emails: {
-    id: string;
-    from: string;
-    subject: string;
-    body_text: string;
-    body_html: string;
-    received_at: string;
-  }[];
+type EmailThread = Database["public"]["Tables"]["email_threads"]["Row"] & {
+  emails: Database["public"]["Tables"]["emails"]["Row"][];
 };
 
-type QueryResult = {
-  unclassifiedThreads: EmailThread[];
-  stats: {
-    totalThreads: number;
-    classifiedThreads: number;
-    unclassifiedThreads: number;
-  };
-  error?: string;
-};
+type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
 
 export async function getEmailAccount(email: string) {
   console.log("🔍 Searching for email account:", email);
@@ -47,93 +29,103 @@ export async function getEmailAccount(email: string) {
 export async function getUnclassifiedThreads(
   supabase: SupabaseClient,
   accountId: string,
-): Promise<QueryResult> {
+): Promise<{ unclassifiedThreads: EmailThread[] }> {
   try {
-    // TODO: Consolidate these queries -- the current logic is jank
-    const { data: allThreads, error: threadsError } = await supabase
-      .from("email_threads")
-      .select("*")
-      .eq("account_id", accountId);
-
-    if (threadsError) {
-      // TODO: Throw an error and handle gracefully -- maybe add retry, etc.
-      return {
-        unclassifiedThreads: [],
-        stats: { totalThreads: 0, classifiedThreads: 0, unclassifiedThreads: 0 },
-        error: `Error fetching threads: ${threadsError.message}`,
-      };
-    }
-
-    // Get all classifications for these threads
-    const { data: classifiedThreadIds, error: classificationError } = await supabase
-      .from("thread_classifications")
-      .select("thread_id")
-      .eq(
-        "thread_id",
-        allThreads?.map((thread) => thread.id),
-      );
-
-    if (classificationError) {
-      return {
-        unclassifiedThreads: [],
-        stats: { totalThreads: 0, classifiedThreads: 0, unclassifiedThreads: 0 },
-        error: `Error fetching classifications: ${classificationError.message}`,
-      };
-    }
-
-    // Build the query for unclassified threads
-    let query = supabase
+    const { data: unclassifiedThreads, error } = await supabase
       .from("email_threads")
       .select(
         `
         id,
+        account_id,
+        created_at,
+        history_id,
+        last_message_at,
         subject,
         thread_summary,
         emails (
           id,
+          account_id,
           from,
+          to,
+          cc,
+          bcc,
           subject,
           body_text,
           body_html,
-          received_at
+          received_at,
+          created_at,
+          content_hash,
+          message_id,
+          thread_id,
+          is_read,
+          labels,
+          snippet
+        ),
+        thread_classifications!left (
+          id
         )
       `,
       )
       .eq("account_id", accountId)
+      .is("thread_classifications.id", null)
       .order("last_message_at", { ascending: false });
 
-    // Only add the "not in" clause if we have classifications
-    if (classifiedThreadIds && classifiedThreadIds.length > 0) {
-      query = query.not(
-        "id",
-        "in",
-        classifiedThreadIds.map((row) => row.thread_id),
+    if (error) {
+      throw new Error(
+        `❌ Error fetching unclassified threads: ${
+          error instanceof Error ? error.message : "Unknown error occurred"
+        }`,
       );
     }
 
-    const { data: unclassifiedThreads, error: threadError } = await query;
-
-    if (threadError) {
-      return {
-        unclassifiedThreads: [],
-        stats: { totalThreads: 0, classifiedThreads: 0, unclassifiedThreads: 0 },
-        error: `Error fetching unclassified threads: ${threadError.message}`,
-      };
-    }
-
     return {
-      unclassifiedThreads: unclassifiedThreads || [],
-      stats: {
-        totalThreads: allThreads?.length || 0,
-        classifiedThreads: classifiedThreadIds?.length || 0,
-        unclassifiedThreads: unclassifiedThreads?.length || 0,
-      },
+      unclassifiedThreads,
     };
   } catch (error) {
-    return {
-      unclassifiedThreads: [],
-      stats: { totalThreads: 0, classifiedThreads: 0, unclassifiedThreads: 0 },
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
+    throw new Error(
+      `❌ Error fetching unclassified threads: ${
+        error instanceof Error ? error.message : "Unknown error occurred"
+      }`,
+    );
   }
+}
+
+export function processClassificationResults(
+  classificationResults: Array<{
+    threadId: string;
+    classification: ThreadClassification;
+  }>,
+) {
+  // Separate into automated and non-automated
+  const automatedThreads = classificationResults.filter((r) => r.classification.is_automated);
+  const nonAutomatedThreads = classificationResults.filter((r) => !r.classification.is_automated);
+
+  return {
+    automatedThreads,
+    nonAutomatedThreads,
+  };
+}
+
+export async function insertAutomatedClassifications(
+  supabase: SupabaseClient,
+  automatedThreads: Array<{
+    threadId: string;
+    classification: ThreadClassification;
+  }>,
+) {
+  if (automatedThreads.length === 0) return;
+
+  const { error } = await supabase.from("thread_classifications").insert(
+    automatedThreads.map((result) => ({
+      ...result.classification,
+      thread_id: result.threadId,
+    })),
+  );
+
+  if (error) {
+    console.error("Error inserting automated classifications:", error);
+    throw error;
+  }
+
+  return automatedThreads.length;
 }

@@ -1,7 +1,12 @@
 import { redisConnection, redisUrl } from "@/lib/config/redis";
 import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
-import { getEmailAccount, getUnclassifiedThreads } from "@/lib/utils/query-utils";
+import {
+  getEmailAccount,
+  getUnclassifiedThreads,
+  insertAutomatedClassifications,
+  processClassificationResults,
+} from "@/lib/utils/query-utils";
 import { checkEnvironmentVariables, createHealthCheckServer } from "@/lib/utils/worker-utils";
 import { EmailClassifier } from "@/services/classifier";
 import { GmailService } from "@/services/gmail";
@@ -65,95 +70,19 @@ const worker = new Worker<WorkerJobData>(
 
       // Step 2: Classify new threads
       console.log("Finding unclassified threads...");
-      const {
-        unclassifiedThreads,
-        stats,
-        error: queryError,
-      } = await getUnclassifiedThreads(supabase, emailAccount.id);
+      const { unclassifiedThreads } = await getUnclassifiedThreads(supabase, emailAccount.id);
 
-      if (queryError) {
-        throw new Error(`Failed to fetch unclassified threads: ${queryError}`);
-      }
-
-      console.log(
-        `Found ${stats.unclassifiedThreads} unclassified threads (${stats.totalThreads} total threads, ${stats.classifiedThreads} classified)`,
-      );
-
-      // Enhanced logging
-      if (stats.unclassifiedThreads === 0) {
-        console.log("No unclassified threads found - skipping classification step");
-      } else {
-        console.log("Starting classification of threads...");
-      }
-
-      for (const thread of unclassifiedThreads) {
-        try {
-          console.log(`\nProcessing thread: ${thread.id}`);
-          console.log(`Subject: ${thread.subject}`);
-
-          const classification = await classifier.classifyThread(thread.id);
-          console.log(
-            `Classification result: ${
-              classification.is_automated ? "Automated" : "Not Automated"
-            }, ` +
-              `Category: ${classification.category}, Confidence: ${classification.confidence_score}`,
-          );
-
-          // If email is not automated, process with LLM
-          if (!classification.is_automated) {
-            console.log(`Processing non-automated thread ${thread.id} with LLM...`);
-
-            const { data: threadEmails } = await supabase
-              .from("emails")
-              .select("*")
-              .eq("thread_id", thread.id)
-              .order("received_at", { ascending: false })
-              .limit(5); // Increased from 3 to 5 for better batching
-
-            if (threadEmails?.length) {
-              const batchSize = 5; // Process 5 emails at once
-              const batches: (typeof threadEmails)[] = [];
-              for (let i = 0; i < threadEmails.length; i += batchSize) {
-                batches.push(threadEmails.slice(i, i + batchSize));
-              }
-
-              console.log(`Processing ${threadEmails.length} emails in ${batches.length} batches`);
-
-              try {
-                await Promise.all(
-                  batches.map((batch) =>
-                    llmService.processBatch(
-                      batch.map((e) => e.id),
-                      3,
-                    ),
-                  ),
-                );
-                console.log(`Successfully processed all emails from thread ${thread.id}`);
-              } catch (error) {
-                console.error(`LLM processing failed for thread ${thread.id}:`, error);
-                metrics.errors++;
-              }
-            }
-          } else {
-            console.log(`Thread ${thread.id} is automated - skipping LLM processing`);
-          }
-
-          metrics.threadsProcessed++;
-          if (metrics.threadsProcessed % 10 === 0) {
-            console.log(`Progress: Processed ${metrics.threadsProcessed} threads so far`);
-          }
-        } catch (error) {
-          console.error(`Error classifying thread ${thread.id}:`, error);
-          metrics.errors++;
-        }
-      }
+      const threadClassifications = await classifier.batchProcessThreads(unclassifiedThreads);
+      const { automatedThreads, nonAutomatedThreads } =
+        processClassificationResults(threadClassifications);
+      await insertAutomatedClassifications(supabase, automatedThreads);
 
       await job.updateProgress(66);
+      console.log(
+        `Classifier Complete:\n✅ Successfully inserted ${automatedThreads.length} automated classifications`,
+      );
 
-      console.log(`\nClassification complete:`);
-      console.log(`- Threads processed: ${metrics.threadsProcessed}`);
-      console.log(`- Errors encountered: ${metrics.errors}`);
-
+      // TODO: Revisit this metrics object...
       // Store sync metrics
       await supabase.from("sync_metrics").insert({
         email: emailAccount.email,

@@ -1,9 +1,10 @@
+import type { Database } from "@/lib/types/supabase";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "../types/supabase";
 
 type ThreadClassification = Database["public"]["Tables"]["thread_classifications"]["Row"];
 type ThreadClassificationInsert = Database["public"]["Tables"]["thread_classifications"]["Insert"];
 type ThreadCategory = Database["public"]["Enums"]["thread_category"];
+type EmailThread = Database["public"]["Tables"]["email_threads"]["Row"];
 
 type EmailInput = {
   from: string;
@@ -393,5 +394,35 @@ export class EmailClassifier {
 
     if (error) throw error;
     return data;
+  }
+
+  async batchProcessThreads(threads: EmailThread[]) {
+    const results: {
+      threadId: string;
+      classification: ThreadClassification;
+    }[] = [];
+
+    for (const thread of threads) {
+      try {
+        console.log(`\n🔄 Processing thread -- ID: ${thread.id}, Subject: ${thread.subject}`);
+
+        const classification = await this.classifyThread(thread.id);
+        console.log(
+          `Classification result: ${
+            classification.is_automated ? "Automated" : "Not Automated"
+          }, ` +
+            `Category: ${classification.category}, Confidence: ${classification.confidence_score}`,
+        );
+
+        results.push({
+          threadId: thread.id,
+          classification,
+        });
+      } catch (error) {
+        console.error(`Error processing thread ${thread.id}:`, error);
+      }
+    }
+
+    return results;
   }
 }
