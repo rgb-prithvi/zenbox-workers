@@ -1,5 +1,4 @@
 import { redisConnection, redisUrl } from "@/lib/config/redis";
-import { DEFAULT_BACKFILL_DAYS_TO_SYNC, DEFAULT_DAYS_TO_SYNC } from "@/lib/constants";
 import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
 import { getEmailAccount, getUnclassifiedThreads } from "@/lib/utils/query-utils";
@@ -9,6 +8,7 @@ import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
 import { Worker } from "bullmq";
 import dotenv from "dotenv";
+import { DEFAULT_DAYS_TO_SYNC } from "./lib/constants";
 
 dotenv.config();
 
@@ -54,26 +54,13 @@ const worker = new Worker<WorkerJobData>(
         `✅ Successfully fetched email account ${emailAccount.email} & instantiated services...`,
       );
       console.log(`🔄Starting ${sync_type} for account ${email}`);
+      await gmailService.triggerSync(
+        email,
+        sync_type,
+        days_to_sync || DEFAULT_DAYS_TO_SYNC,
+        metrics,
+      );
 
-      switch (sync_type) {
-        case "FULL_SYNC":
-          await gmailService.syncNewAccount(
-            emailAccount.email,
-            days_to_sync || DEFAULT_DAYS_TO_SYNC,
-            metrics,
-          );
-          break;
-        case "BACKFILL_SYNC":
-          await gmailService.syncNewAccount(
-            emailAccount.email,
-            days_to_sync || DEFAULT_BACKFILL_DAYS_TO_SYNC,
-            metrics,
-          );
-          break;
-        case "INCREMENTAL_SYNC":
-          await gmailService.syncChanges(emailAccount.email, metrics);
-          break;
-      }
       await job.updateProgress(33);
 
       // Step 2: Classify new threads
@@ -219,14 +206,12 @@ const worker = new Worker<WorkerJobData>(
 
 // Add worker ready event handler
 worker.on("ready", () => {
-  console.log("Worker is ready to process jobs");
-  workerReady = true;
+  console.log("Worker ready handler triggered: Worker is ready to process jobs!");
 });
 
 // Add connection error handler
 worker.on("error", (error) => {
-  console.error("Worker connection error:", error);
-  workerReady = false;
+  console.error("Worker connection error triggered:", error);
 });
 
 // Error handling

@@ -560,4 +560,25 @@ export class GmailService {
       throw error;
     }
   }
+
+  async triggerSync(
+    email: string,
+    // TODO: Make this an enum and make consistent with Supabase
+    syncType: "FULL_SYNC" | "BACKFILL_SYNC" | "INCREMENTAL_SYNC",
+    daysToSync: number,
+    metrics: SyncMetrics,
+  ) {
+    console.log(`Triggering ${syncType} sync for email: ${email}`);
+    switch (syncType) {
+      case "FULL_SYNC":
+        await this.syncNewAccount(email, daysToSync, metrics);
+        break;
+      case "BACKFILL_SYNC":
+        await this.syncNewAccount(email, daysToSync, metrics);
+        break;
+      case "INCREMENTAL_SYNC":
+        await this.syncChanges(email, metrics);
+        break;
+    }
+  }
 }
