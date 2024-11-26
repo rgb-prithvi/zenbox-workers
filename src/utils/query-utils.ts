@@ -29,13 +29,14 @@ export async function getUnclassifiedThreads(
   accountId: string,
 ): Promise<QueryResult> {
   try {
-    // Get all threads for this account
+    // TODO: Consolidate these queries -- the current logic is jank
     const { data: allThreads, error: threadsError } = await supabase
       .from("email_threads")
       .select("*")
       .eq("account_id", accountId);
 
     if (threadsError) {
+      // TODO: Throw an error and handle gracefully -- maybe add retry, etc.
       return {
         unclassifiedThreads: [],
         stats: { totalThreads: 0, classifiedThreads: 0, unclassifiedThreads: 0 },

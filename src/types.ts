@@ -2,6 +2,7 @@ export interface WorkerJobData {
   email: string;
   sync_type: "FULL_SYNC" | "BACKFILL_SYNC" | "INCREMENTAL_SYNC";
   days_to_sync?: number;
+  user_context?: string;
 }
 
 export interface SyncMetrics {

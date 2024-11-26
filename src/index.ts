@@ -17,6 +17,9 @@ const requiredEnvVars = [
   "GMAIL_REDIRECT_URI",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_KEY",
+  "OPENAI_API_KEY",
+  "UPSTASH_REDIS_URL",
+  "UPSTASH_REDIS_TOKEN",
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -25,13 +28,13 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// Add a flag to track worker readiness
+// TODO: Do I need this logic?
 let workerReady = false;
 
 // Healthcheck server
+// TODO: Get this working right on deploymeny
 const server = http.createServer((req, res) => {
   if (req.url === "/health" || req.url === "/") {
-    // Only return 200 if the worker is ready
     if (workerReady) {
       res.writeHead(200);
       res.end("OK");
@@ -45,32 +48,32 @@ const server = http.createServer((req, res) => {
   res.end();
 });
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  console.log(`Health check server listening on port ${PORT}`);
+const HEALTH_CHECK_PORT = 8080;
+server.listen(HEALTH_CHECK_PORT, () => {
+  console.log(`Health check server listening on port ${HEALTH_CHECK_PORT}`);
   console.log(
     "Worker started with connection to:",
-    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
+    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost", // TODO: Fix this Redis URL connection logic -- kinda jank
   );
 });
 
-// Add LLM queue setup
+// TODO: Fix this Redis URL connection logic -- kinda jank
 logRedisConnection();
 
+// TODO: Add consistency to sync type
 const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
+      // TODO: Make sure zen-inbox schema is consistent
       const { email, sync_type, days_to_sync, user_context } = job.data;
       console.log(
         `Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
       );
       await job.updateProgress(0);
 
-      // Initialize services
       const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
-      // Get account details using email
       console.log("Searching for email account:", email);
       const { data: emailAccount, error } = await supabase
         .from("email_accounts")
@@ -88,6 +91,7 @@ const worker = new Worker<WorkerJobData>(
       const classifier = new EmailClassifier();
       const llmService = new LLMService(user_context);
 
+      // TODO: Figure out what's good with these metrics
       const metrics: SyncMetrics = {
         startTime: Date.now(),
         threadsProcessed: 0,
@@ -102,12 +106,24 @@ const worker = new Worker<WorkerJobData>(
         throw new Error(`No account found for ID ${email}`);
       }
 
+      // TODO: Lift these numbers up to constants or config file
+      const DEFAULT_DAYS_TO_SYNC = 7;
+      const DEFAULT_BACKFILL_DAYS_TO_SYNC = 14;
+
       switch (sync_type) {
         case "FULL_SYNC":
-          await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 14, metrics);
+          await gmailService.syncNewAccount(
+            emailAccount.email,
+            days_to_sync || DEFAULT_DAYS_TO_SYNC,
+            metrics,
+          );
           break;
         case "BACKFILL_SYNC":
-          await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 30, metrics);
+          await gmailService.syncNewAccount(
+            emailAccount.email,
+            days_to_sync || DEFAULT_BACKFILL_DAYS_TO_SYNC,
+            metrics,
+          );
           break;
         case "INCREMENTAL_SYNC":
           await gmailService.syncChanges(emailAccount.email, metrics);
