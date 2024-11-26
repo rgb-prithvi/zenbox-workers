@@ -25,11 +25,20 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+// Add a flag to track worker readiness
+let workerReady = false;
+
 // Healthcheck server
 const server = http.createServer((req, res) => {
   if (req.url === "/health" || req.url === "/") {
-    res.writeHead(200);
-    res.end("OK");
+    // Only return 200 if the worker is ready
+    if (workerReady) {
+      res.writeHead(200);
+      res.end("OK");
+    } else {
+      res.writeHead(503);
+      res.end("Service not ready");
+    }
     return;
   }
   res.writeHead(404);
@@ -236,8 +245,25 @@ const worker = new Worker<WorkerJobData>(
       throw error;
     }
   },
-  { connection: redisConnection },
+  { 
+    connection: redisConnection,
+    // Add connection options
+    autorun: true,
+    maxStalledCount: 10,
+  },
 );
+
+// Add worker ready event handler
+worker.on("ready", () => {
+  console.log("Worker is ready to process jobs");
+  workerReady = true;
+});
+
+// Add connection error handler
+worker.on("error", (error) => {
+  console.error("Worker connection error:", error);
+  workerReady = false;
+});
 
 // Error handling
 
