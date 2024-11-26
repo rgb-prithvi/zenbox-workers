@@ -1,0 +1,2 @@
+export const DEFAULT_DAYS_TO_SYNC = 7;
+export const DEFAULT_BACKFILL_DAYS_TO_SYNC = 14;

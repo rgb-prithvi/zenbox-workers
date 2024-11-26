@@ -1,5 +1,5 @@
 export async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
+  fn: () => T | Promise<T>,
   maxRetries = 3,
   initialDelay = 1000
 ): Promise<T> {

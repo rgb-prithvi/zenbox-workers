@@ -1,5 +1,8 @@
+import { supabase } from "@/lib/supabase-client";
 import { SupabaseClient } from "@supabase/supabase-js";
+import { retryWithBackoff } from "./retry";
 
+// TODO: Use Supabase schema types and move this stuff to dedicated types file
 type EmailThread = {
   id: string;
   subject: string;
@@ -23,6 +26,23 @@ type QueryResult = {
   };
   error?: string;
 };
+
+export async function getEmailAccount(email: string) {
+  console.log("🔍 Searching for email account:", email);
+  const result = await retryWithBackoff(() =>
+    supabase.from("email_accounts").select("*").eq("email", email).single(),
+  );
+
+  if (result.error || !result.data) {
+    throw new Error(
+      `❌ No account found for ${email}:\n Error Message:\n${
+        result.error?.message || "<The error message didn't come through>"
+      }`,
+    );
+  }
+
+  return result.data;
+}
 
 export async function getUnclassifiedThreads(
   supabase: SupabaseClient,

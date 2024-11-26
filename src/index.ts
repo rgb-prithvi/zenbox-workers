@@ -1,18 +1,18 @@
 import { redisConnection, redisUrl } from "@/lib/config/redis";
+import { DEFAULT_BACKFILL_DAYS_TO_SYNC, DEFAULT_DAYS_TO_SYNC } from "@/lib/constants";
+import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
-import { getUnclassifiedThreads } from "@/lib/utils/query-utils";
+import { getEmailAccount, getUnclassifiedThreads } from "@/lib/utils/query-utils";
 import { checkEnvironmentVariables, createHealthCheckServer } from "@/lib/utils/worker-utils";
 import { EmailClassifier } from "@/services/classifier";
 import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
-import { createClient } from "@supabase/supabase-js";
 import { Worker } from "bullmq";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 checkEnvironmentVariables();
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 const healthCheckServer = createHealthCheckServer();
 
 const HEALTH_CHECK_PORT = 8080;
@@ -34,18 +34,7 @@ const worker = new Worker<WorkerJobData>(
       console.log(`--------------------------------\n`);
       await job.updateProgress(0);
 
-      console.log("Searching for email account:", email);
-      const { data: emailAccount, error } = await supabase
-        .from("email_accounts")
-        .select("*")
-        .eq("email", email)
-        .single();
-
-      if (error || !emailAccount) {
-        throw new Error(
-          `No account found for email ${email} (Error: ${error?.message || "account not found"})`,
-        );
-      }
+      const emailAccount = await getEmailAccount(email);
 
       const gmailService = new GmailService();
       const classifier = new EmailClassifier();
@@ -61,14 +50,10 @@ const worker = new Worker<WorkerJobData>(
       };
 
       // Step 1: Sync emails based on sync type
-      console.log(`Starting ${sync_type} for account ${email}`);
-      if (!emailAccount) {
-        throw new Error(`No account found for ID ${email}`);
-      }
-
-      // TODO: Lift these numbers up to constants or config file
-      const DEFAULT_DAYS_TO_SYNC = 7;
-      const DEFAULT_BACKFILL_DAYS_TO_SYNC = 14;
+      console.log(
+        `✅ Successfully fetched email account ${emailAccount.email} & instantiated services...`,
+      );
+      console.log(`🔄Starting ${sync_type} for account ${email}`);
 
       switch (sync_type) {
         case "FULL_SYNC":
