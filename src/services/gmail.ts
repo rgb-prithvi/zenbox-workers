@@ -484,7 +484,11 @@ export class GmailService {
       .limit(1)
       .single();
 
-    if (syncError) throw new Error(`No sync history found for ${email}`);
+    // If no sync state found or there's an error, fall back to full sync
+    if (syncError) {
+      console.log(`No previous sync state found for ${email}, falling back to full sync`);
+      return this.syncNewAccount(email, 7, metrics);
+    }
 
     console.log(`Found sync state for account ID: ${syncState.account_id}`);
     console.log(`Last sync state:`, {
