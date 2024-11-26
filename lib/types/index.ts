@@ -1,8 +1,8 @@
-// Worker types
 export interface WorkerJobData {
-  email_account_id: string;
-  sync_type: "FULL_SYNC" | "INCREMENTAL_SYNC" | "BACKFILL_SYNC";
+  email: string;
+  sync_type: "FULL_SYNC" | "BACKFILL_SYNC" | "INCREMENTAL_SYNC";
   days_to_sync?: number;
+  user_context?: string;
 }
 
 export interface SyncMetrics {

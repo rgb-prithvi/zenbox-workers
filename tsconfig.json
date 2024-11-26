@@ -11,5 +11,5 @@
     "noImplicitAny": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/test-scripts/**/*"]
+  "exclude": ["node_modules", "src/lib/test-scripts/**/*"]
 }
