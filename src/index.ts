@@ -1,43 +1,24 @@
 import { redisConnection, redisUrl } from "@/lib/config/redis";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
 import { getUnclassifiedThreads } from "@/lib/utils/query-utils";
-import { checkEnvironmentVariables } from "@/lib/utils/worker-utils";
+import { checkEnvironmentVariables, createHealthCheckServer } from "@/lib/utils/worker-utils";
 import { EmailClassifier } from "@/services/classifier";
 import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
 import { createClient } from "@supabase/supabase-js";
 import { Worker } from "bullmq";
 import dotenv from "dotenv";
-import http from "http";
 
 dotenv.config();
 
 checkEnvironmentVariables();
-
-// TODO: Do I need this logic?
-let workerReady = false;
-
-// Healthcheck server
-// TODO: Get this working right on deploymeny
-const server = http.createServer((req, res) => {
-  if (req.url === "/health" || req.url === "/") {
-    if (workerReady) {
-      res.writeHead(200);
-      res.end("OK");
-    } else {
-      res.writeHead(503);
-      res.end("Service not ready");
-    }
-    return;
-  }
-  res.writeHead(404);
-  res.end();
-});
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+const healthCheckServer = createHealthCheckServer();
 
 const HEALTH_CHECK_PORT = 8080;
-server.listen(HEALTH_CHECK_PORT, () => {
-  console.log(`Health check server listening on port ${HEALTH_CHECK_PORT}`);
-  console.log(`Worker started with connection to: ${redisUrl.hostname}`);
+healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
+  console.log(`✅ Health check server listening on port ${HEALTH_CHECK_PORT}`);
+  console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
 });
 
 // TODO: Add consistency to sync type
@@ -48,11 +29,10 @@ const worker = new Worker<WorkerJobData>(
       // TODO: Make sure zen-inbox schema is consistent
       const { email, sync_type, days_to_sync, user_context } = job.data;
       console.log(
-        `Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
+        `🔄 Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
       );
+      console.log(`--------------------------------\n`);
       await job.updateProgress(0);
-
-      const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
       console.log("Searching for email account:", email);
       const { data: emailAccount, error } = await supabase
