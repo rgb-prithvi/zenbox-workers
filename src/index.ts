@@ -1,6 +1,7 @@
 import { logRedisConnection, redisConnection, redisUrl } from "@/lib/config/redis";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
 import { getUnclassifiedThreads } from "@/lib/utils/query-utils";
+import { checkEnvironmentVariables } from "@/lib/utils/worker-utils";
 import { EmailClassifier } from "@/services/classifier";
 import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
@@ -11,22 +12,7 @@ import http from "http";
 
 dotenv.config();
 
-const requiredEnvVars = [
-  "GMAIL_CLIENT_ID",
-  "GMAIL_CLIENT_SECRET",
-  "GMAIL_REDIRECT_URI",
-  "SUPABASE_URL",
-  "SUPABASE_SERVICE_KEY",
-  "OPENAI_API_KEY",
-  "UPSTASH_REDIS_URL",
-  "UPSTASH_REDIS_TOKEN",
-];
-
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
-  }
-}
+checkEnvironmentVariables();
 
 // TODO: Do I need this logic?
 let workerReady = false;
