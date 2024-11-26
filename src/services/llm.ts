@@ -49,10 +49,10 @@ type LLMResponse = z.infer<typeof responseSchema>;
 export class LLMService {
   private openai;
   private supabase;
-  private readonly SYSTEM_PROMPT = SYSTEM_PROMPT;
-  private limit = pLimit(3); // Limit concurrent LLM calls
+  private readonly systemPrompt: string;
+  private limit = pLimit(4);
 
-  constructor() {
+  constructor(userContext?: string) {
     this.openai = createOpenAI({
       apiKey: process.env.OPENAI_API_KEY!,
     });
@@ -61,6 +61,9 @@ export class LLMService {
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_KEY!,
     );
+
+    // Initialize system prompt with user context
+    this.systemPrompt = SYSTEM_PROMPT.replace("{{userContext}}", userContext || "");
   }
 
   private async generatePrompt(emailId: string): Promise<string> {
@@ -89,7 +92,7 @@ Body: ${email.body_text || email.body_html}`;
         model: this.openai("gpt-4o-mini"),
         schema: responseSchema,
         prompt: prompt,
-        system: this.SYSTEM_PROMPT,
+        system: this.systemPrompt,
       });
 
       const result = responseSchema.parse(object);

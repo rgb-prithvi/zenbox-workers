@@ -7,6 +7,11 @@ import { Database } from "../types/supabase";
 dotenv.config();
 
 const email = "prithvi@genaicollective.ai";
+const userContext = `
+User Name: Prithvi
+
+User Context: “My name is Prithvi. I run an AI community called GenAI Collective. A lot of the messages in my inbox are from people in the community, and come in via "Luma", our events hosting platform. Many of these emails are about upcoming events. I specifically run the NYC chapter of the GenAI Collective, so many of the emails from other chapters (Boston, Paris, SF, etc) are not relevant for me, and hence should be marked as "NOT RELEVANT". Messages addressed to GenAI Collective NYC needs my review, as I am the leader of the NYC chapter and therefore the responsible party for the email.”
+`;
 
 async function testIndexWorker() {
   logRedisConnection();
@@ -41,7 +46,8 @@ async function testIndexWorker() {
         data: {
           email,
           sync_type: "FULL_SYNC" as const,
-          days_to_sync: 3,
+          days_to_sync: 2,
+          user_context: userContext,
         },
       },
       {
@@ -49,6 +55,7 @@ async function testIndexWorker() {
         data: {
           email,
           sync_type: "INCREMENTAL_SYNC" as const,
+          user_context: userContext,
         },
       },
     ];

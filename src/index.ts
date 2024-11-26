@@ -61,7 +61,7 @@ const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
-      const { email, sync_type, days_to_sync } = job.data;
+      const { email, sync_type, days_to_sync, user_context } = job.data;
       console.log(
         `Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
       );
@@ -86,7 +86,7 @@ const worker = new Worker<WorkerJobData>(
 
       const gmailService = new GmailService();
       const classifier = new EmailClassifier();
-      const llmService = new LLMService();
+      const llmService = new LLMService(user_context);
 
       const metrics: SyncMetrics = {
         startTime: Date.now(),
@@ -145,10 +145,13 @@ const worker = new Worker<WorkerJobData>(
 
           const classification = await classifier.classifyThread(thread.id);
           console.log(
-            `Classification result: ${classification.is_automated ? "Automated" : "Not Automated"}`,
+            `Classification result: ${
+              classification.is_automated ? "Automated" : "Not Automated"
+            }, ` +
+              `Category: ${classification.category}, Confidence: ${classification.confidence_score}`,
           );
 
-          // If thread is not automated, process immediately
+          // If email is not automated, process with LLM
           if (!classification.is_automated) {
             console.log(`Processing non-automated thread ${thread.id} with LLM...`);
 
@@ -245,7 +248,7 @@ const worker = new Worker<WorkerJobData>(
       throw error;
     }
   },
-  { 
+  {
     connection: redisConnection,
     // Add connection options
     autorun: true,
