@@ -1,6 +1,7 @@
+// @ts-nocheck
+import { LLMService } from "@/services/llm";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
-import { LLMService } from "../services/llm";
 
 dotenv.config();
 

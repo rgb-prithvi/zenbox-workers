@@ -1,6 +1,7 @@
+// @ts-nocheck
+import { SyncMetrics } from "@/lib/types";
+import { GmailService } from "@/services/gmail";
 import dotenv from "dotenv";
-import { GmailService } from "../../services/gmail";
-import { SyncMetrics } from "../../types";
 
 dotenv.config();
 

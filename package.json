@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "generate-types": "supabase gen types typescript --project-id kxmpemmfddkoribhiomg > src/types/supabase.ts"
+    "generate-types": "supabase gen types typescript --project-id kxmpemmfddkoribhiomg > src/lib/types/supabase.ts"
   },
   "keywords": [],
   "author": "",

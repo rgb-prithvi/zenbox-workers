@@ -1,8 +1,9 @@
+// @ts-nocheck
+import { logRedisConnection, redisConnection } from "@/lib/config/redis";
+import { Database } from "@/lib/types/supabase";
 import { createClient } from "@supabase/supabase-js";
 import { Queue } from "bullmq";
 import dotenv from "dotenv";
-import { logRedisConnection, redisConnection } from "../config/redis";
-import { Database } from "../types/supabase";
 
 dotenv.config();
 

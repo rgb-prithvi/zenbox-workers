@@ -1,13 +1,13 @@
+import { logRedisConnection, redisConnection, redisUrl } from "@/lib/config/redis";
+import { SyncMetrics, WorkerJobData } from "@/lib/types";
+import { getUnclassifiedThreads } from "@/lib/utils/query-utils";
+import { EmailClassifier } from "@/services/classifier";
+import { GmailService } from "@/services/gmail";
+import { LLMService } from "@/services/llm";
 import { createClient } from "@supabase/supabase-js";
 import { Worker } from "bullmq";
 import dotenv from "dotenv";
 import http from "http";
-import { logRedisConnection, redisConnection, redisUrl } from "./config/redis";
-import { EmailClassifier } from "./services/classifier";
-import { GmailService } from "./services/gmail";
-import { LLMService } from "./services/llm";
-import { SyncMetrics, WorkerJobData } from "./types";
-import { getUnclassifiedThreads } from "./utils/query-utils";
 
 dotenv.config();
 
