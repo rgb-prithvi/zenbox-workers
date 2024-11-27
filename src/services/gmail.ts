@@ -408,15 +408,6 @@ export class GmailService {
 
         pageToken = response.nextPageToken;
 
-        // Update sync state periodically
-        await this.supabase
-          .from("email_sync_states")
-          .update({
-            emails_synced: emailsSynced,
-            threads_synced: threadsSynced,
-          })
-          .eq("id", syncState.id);
-
         if (pageToken) {
           await new Promise((r) => setTimeout(r, 1000));
         }
@@ -424,27 +415,26 @@ export class GmailService {
 
       const profile = await this.gmailRequest(accessToken, "profile", {});
 
-      // Update final sync state
-      await this.supabase
-        .from("email_sync_states")
-        .update({
-          last_history_id: profile.historyId,
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          emails_synced: emailsSynced,
-          threads_synced: threadsSynced,
-        })
-        .eq("id", syncState.id);
+      // Create final sync state record
+      await this.supabase.from("email_sync_states").insert({
+        account_id: account.id,
+        last_history_id: profile.historyId,
+        status: "completed",
+        sync_type: "full",
+        completed_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+        emails_synced: emailsSynced,
+        threads_synced: threadsSynced,
+      });
     } catch (error) {
-      // Update sync state with error
-      await this.supabase
-        .from("email_sync_states")
-        .update({
-          status: "failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", syncState.id);
+      await this.supabase.from("email_sync_states").insert({
+        account_id: account.id,
+        status: "failed",
+        sync_type: "full",
+        error: error instanceof Error ? error.message : "Unknown error",
+        completed_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+      });
 
       metrics.errors++;
       console.error(`Error syncing new account for email: ${email}`, error);

@@ -45,6 +45,7 @@ export async function getUnclassifiedThreads(
         emails (
           id,
           account_id,
+          thread_id,
           from,
           to,
           cc,
@@ -55,8 +56,6 @@ export async function getUnclassifiedThreads(
           received_at,
           created_at,
           content_hash,
-          message_id,
-          thread_id,
           is_read,
           labels,
           snippet
