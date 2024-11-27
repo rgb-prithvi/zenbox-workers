@@ -46,6 +46,7 @@ const worker = new Worker<WorkerJobData>(
       const llmService = new LLMService(user_context);
 
       // TODO: Figure out what's good with these metrics
+      // Probably not reliable rn -- clean up and consolidate logic
       const metrics: SyncMetrics = {
         startTime: Date.now(),
         threadsProcessed: 0,

@@ -367,25 +367,6 @@ export class GmailService {
 
     if (error) throw new Error(`No account found for ${email}`);
 
-    // Create initial sync state
-    const { data: syncState, error: syncStateError } = await this.supabase
-      .from("email_sync_states")
-      .insert({
-        account_id: account.id,
-        sync_type: "full",
-        status: "in_progress",
-        started_at: new Date().toISOString(),
-        emails_synced: 0,
-        threads_synced: 0,
-      })
-      .select()
-      .single();
-
-    if (syncStateError) {
-      console.error("Failed to create sync state:", syncStateError);
-      throw syncStateError;
-    }
-
     const accessToken = await this.setupGmailClient(account);
     let pageToken: string | undefined;
 
