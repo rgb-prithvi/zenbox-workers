@@ -83,7 +83,7 @@ const worker = new Worker<WorkerJobData>(
       );
 
       // TODO: Revisit this metrics object...
-      // Store sync metrics
+      // Move these inserts to a utils function
       await supabase.from("sync_metrics").insert({
         email: emailAccount.email,
         duration_ms: Date.now() - metrics.startTime,
@@ -94,7 +94,7 @@ const worker = new Worker<WorkerJobData>(
         success: metrics.errors === 0,
       });
 
-      // Add sync state record
+      // Move this up to occur after email sync and before classification
       await supabase.from("email_sync_states").insert({
         account_id: emailAccount.id,
         last_history_id: emailAccount.last_history_id,
@@ -107,18 +107,16 @@ const worker = new Worker<WorkerJobData>(
       });
 
       // Step 3: Process non-automated threads with LLM
-      // This will be handled by a separate worker process
+      console.log(`🔄 Starting LLM classification for ${nonAutomatedThreads.length} threads...`);
+      if (nonAutomatedThreads.length > 0) {
+        const emailIds = nonAutomatedThreads.map((thread) => thread.threadId);
+        await llmService.processBatch(emailIds);
+      }
+
       await job.updateProgress(100);
 
       return {
         success: true,
-        metrics: {
-          duration_ms: Date.now() - metrics.startTime,
-          threads_processed: metrics.threadsProcessed,
-          emails_processed: metrics.emailsProcessed,
-          errors: metrics.errors,
-          retries: metrics.retries,
-        },
       };
     } catch (error) {
       console.error("Job failed:", error);
@@ -127,23 +125,18 @@ const worker = new Worker<WorkerJobData>(
   },
   {
     connection: redisConnection,
-    // Add connection options
     autorun: true,
     maxStalledCount: 10,
   },
 );
 
-// Add worker ready event handler
 worker.on("ready", () => {
   console.log("Worker ready handler triggered: Worker is ready to process jobs!");
 });
 
-// Add connection error handler
 worker.on("error", (error) => {
   console.error("Worker connection error triggered:", error);
 });
-
-// Error handling
 
 interface JobLog {
   jobId: string;
@@ -174,4 +167,4 @@ worker.on("failed", (job, error) => {
   console.table(jobLogs);
 });
 
-console.log("Worker started...");
+console.log("🚀 Worker started...");

@@ -126,25 +126,25 @@ Body: ${email.body_text || email.body_html}`;
   }
 
   async processBatch(emailIds: string[], concurrency: number = 4): Promise<void> {
-    console.log(
-      `Starting batch processing of ${emailIds.length} emails with concurrency ${concurrency}...`,
-    );
+    const batchSize = emailIds.length;
+    console.log(`Starting batch: ${batchSize} emails (max ${concurrency} concurrent)`);
 
     this.limit = pLimit(concurrency);
-    const promises = emailIds.map((emailId) =>
-      this.limit(async () => {
-        try {
-          console.log(`Starting processing of email ${emailId}`);
-          await this.processEmail(emailId);
-          console.log(`✓ Completed email ${emailId}`);
-        } catch (error) {
-          console.error(`✗ Failed email ${emailId}:`, error);
-        }
-      }),
-    );
 
-    await Promise.all(promises);
-    console.log(`Completed batch processing of ${emailIds.length} emails`);
+    const processEmailWithLogging = async (emailId: string) => {
+      try {
+        console.log(`→ Processing: ${emailId}`);
+        await this.processEmail(emailId);
+        console.log(`✓ Success: ${emailId}`);
+      } catch (error) {
+        console.error(`✗ Failed: ${emailId}`, error);
+      }
+    };
+
+    const tasks = emailIds.map((emailId) => this.limit(() => processEmailWithLogging(emailId)));
+
+    await Promise.all(tasks);
+    console.log(`Batch complete: ${batchSize} emails processed`);
   }
 
   async processUnclassifiedEmails(batchSize: number = 10): Promise<void> {
