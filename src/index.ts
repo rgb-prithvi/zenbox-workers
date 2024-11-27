@@ -26,6 +26,26 @@ healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
   console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
 });
 
+// Add shutdown handler
+async function shutdown() {
+  console.log('Shutting down gracefully...');
+  
+  // Close health check server
+  healthCheckServer.close(() => {
+    console.log('Health check server closed');
+  });
+
+  // Close worker
+  await worker.close();
+  console.log('Worker closed');
+  
+  process.exit(0);
+}
+
+// Add process handlers
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
 // TODO: Add consistency to sync type
 const worker = new Worker<WorkerJobData>(
   "email-processing",

@@ -1,10 +1,10 @@
+import { Database } from "@/lib/types/supabase";
+import SYSTEM_PROMPT from "@/prompts";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 import { generateObject } from "ai";
 import pLimit from "p-limit";
 import { z } from "zod";
-import { Database } from "../types/supabase";
-import SYSTEM_PROMPT from "./prompts";
 
 // Define the response schema using Zod
 const responseSchema = z.object({

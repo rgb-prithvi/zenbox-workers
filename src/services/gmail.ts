@@ -1,8 +1,8 @@
+import { SyncMetrics } from "@/lib/types";
+import { Database } from "@/lib/types/supabase";
+import { retryWithBackoff } from "@/lib/utils/retry";
 import { createClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
-import { SyncMetrics } from "../types";
-import { Database } from "../types/supabase";
-import { retryWithBackoff } from "../utils/retry";
 
 type EmailAccount = Database["public"]["Tables"]["email_accounts"]["Row"];
 type Email = Database["public"]["Tables"]["emails"]["Row"];

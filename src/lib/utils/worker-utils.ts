@@ -21,7 +21,7 @@ export const checkEnvironmentVariables = () => {
   }
 };
 
-export const createHealthCheckServer = (port = 8080) => {
+export const createHealthCheckServer = () => {
   const server = http.createServer((req, res) => {
     if (req.url === "/health") {
       res.writeHead(200);
@@ -30,10 +30,6 @@ export const createHealthCheckServer = (port = 8080) => {
     }
     res.writeHead(404);
     res.end();
-  });
-
-  server.listen(port, () => {
-    console.log(`Health check server listening on port ${port}`);
   });
 
   return server;
