@@ -114,15 +114,21 @@ export async function insertAutomatedClassifications(
 ) {
   if (automatedThreads.length === 0) return;
 
-  const { error } = await supabase.from("thread_classifications").insert(
-    automatedThreads.map((result) => ({
-      ...result.classification,
-      thread_id: result.threadId,
-    })),
-  );
+  const { error } = await supabase
+    .from("thread_classifications")
+    .upsert(
+      automatedThreads.map((result) => ({
+        ...result.classification,
+        thread_id: result.threadId,
+      })),
+      { 
+        onConflict: 'thread_id',
+        ignoreDuplicates: true 
+      }
+    );
 
   if (error) {
-    console.error("Error inserting automated classifications:", error);
+    console.error("Error upserting automated classifications:", error);
     throw error;
   }
 
