@@ -1,3 +1,4 @@
+import 'module-alias/register';
 import { redisConnection } from "@/lib/config/redis";
 import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
@@ -13,6 +14,7 @@ import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
 import { Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
+import 'module-alias/register';
 import cron from "node-cron";
 import { DEFAULT_DAYS_TO_SYNC } from "./lib/constants";
 

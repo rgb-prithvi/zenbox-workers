@@ -11,6 +11,9 @@
     "test": "pnpm dlx tsx src/lib/test-scripts/test-index-worker.ts",
     "generate-types": "supabase gen types typescript --project-id kxmpemmfddkoribhiomg > src/lib/types/supabase.ts"
   },
+  "_moduleAliases": {
+    "@": "dist"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -24,8 +27,9 @@
     "bullmq": "^4.15.0",
     "dotenv": "^16.3.1",
     "googleapis": "^129.0.0",
+    "module-alias": "^2.2.3",
     "node-cron": "^3.0.3",
-    "p-limit": "^6.1.0",
+    "p-limit": "3.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
