@@ -54,7 +54,6 @@ const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
-      // TODO: Make sure zen-inbox schema is consistent
       const { email, sync_type, days_to_sync, user_context } = job.data;
       console.log(
         `🔄 Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
@@ -62,9 +61,25 @@ const worker = new Worker<WorkerJobData>(
       console.log(`--------------------------------\n`);
       await job.updateProgress(0);
 
-      const emailAccount = await getEmailAccount(email);
-
+      // Add rate limiting check
       const gmailService = new GmailService();
+      const { syncState, error: syncError } = await gmailService.getLastCompletedSyncState(email);
+      
+      if (syncState && !syncError) {
+        const lastSyncTime = new Date(syncState.completed_at).getTime();
+        const oneMinuteAgo = Date.now() - 60 * 1000; // 1 minute in milliseconds
+        
+        if (lastSyncTime > oneMinuteAgo) {
+          console.log(`Skipping sync for ${email} - last sync was less than 1 minute ago`);
+          return {
+            success: true,
+            skipped: true,
+            reason: 'Recent sync detected'
+          };
+        }
+      }
+
+      const emailAccount = await getEmailAccount(email);
       const classifier = new EmailClassifier();
       const llmService = new LLMService(user_context);
 

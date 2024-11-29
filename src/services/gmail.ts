@@ -449,10 +449,7 @@ export class GmailService {
     }
   }
 
-  async syncChanges(email: string, metrics: SyncMetrics) {
-    console.log(`Starting incremental sync for email: ${email}`);
-
-    // Get the most recent completed sync state for this email
+  async getLastCompletedSyncState(email: string) {
     const { data: syncState, error: syncError } = await this.supabase
       .from("email_sync_states")
       .select("*, email_accounts(*)")
@@ -461,6 +458,19 @@ export class GmailService {
       .order("completed_at", { ascending: false })
       .limit(1)
       .single();
+
+    if (syncError) {
+      return { syncState: null, error: syncError };
+    }
+
+    return { syncState, error: null };
+  }
+
+  async syncChanges(email: string, metrics: SyncMetrics) {
+    console.log(`Starting incremental sync for email: ${email}`);
+
+    // Using the new method
+    const { syncState, error: syncError } = await this.getLastCompletedSyncState(email);
 
     // If no sync state found or there's an error, fall back to full sync
     if (syncError) {
