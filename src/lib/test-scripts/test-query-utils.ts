@@ -1,14 +1,16 @@
 import { supabase } from "@/lib/supabase-client";
 import { getUnclassifiedThreads } from "../utils/query-utils";
 
+const testAccountId = "70d72857-f2a1-4d72-acb3-4ed79c2f3def";
+
 async function testGetUnclassifiedThreads() {
   try {
     // Replace with a valid account ID from your database
-    const testAccountId = "3c7318e5-10b0-4d03-9d93-723d9e0c0960";
-
     console.log("🔍 Fetching unclassified threads for account:", testAccountId);
 
     const { unclassifiedThreads } = await getUnclassifiedThreads(supabase, testAccountId);
+
+    console.log(unclassifiedThreads.slice(0, 10));
 
     console.log("\n📊 Results:");
     console.log(`Found ${unclassifiedThreads.length} unclassified threads`);

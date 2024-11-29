@@ -35,57 +35,30 @@ export async function getUnclassifiedThreads(
       .from("email_threads")
       .select(
         `
-        id,
-        account_id,
-        created_at,
-        history_id,
-        last_message_at,
-        subject,
-        thread_summary,
-        emails (
-          id,
-          account_id,
-          thread_id,
-          from,
-          to,
-          cc,
-          bcc,
-          subject,
-          body_text,
-          body_html,
-          received_at,
-          created_at,
-          content_hash,
-          is_read,
-          labels,
-          snippet
-        ),
-        thread_classifications!left (
-          id
-        )
-      `,
+      id,
+      subject,
+      last_message_at,
+      account_id,
+      created_at,
+      history_id,
+      thread_summary,
+      emails (*)
+    `,
       )
       .eq("account_id", accountId)
-      .is("thread_classifications.id", null)
+      .eq("is_classified", false)
       .order("last_message_at", { ascending: false });
 
     if (error) {
-      throw new Error(
-        `❌ Error fetching unclassified threads: ${
-          error instanceof Error ? error.message : "Unknown error occurred"
-        }`,
-      );
+      throw new Error(`❌ Error fetching unclassified threads: ${error.message}`);
     }
 
     return {
-      unclassifiedThreads,
+      unclassifiedThreads: unclassifiedThreads || [],
     };
   } catch (error) {
-    throw new Error(
-      `❌ Error fetching unclassified threads: ${
-        error instanceof Error ? error.message : "Unknown error occurred"
-      }`,
-    );
+    console.error("❌ Error fetching unclassified threads:", error);
+    throw new Error(`Failed to fetch unclassified threads`);
   }
 }
 
@@ -114,18 +87,16 @@ export async function insertAutomatedClassifications(
 ) {
   if (automatedThreads.length === 0) return;
 
-  const { error } = await supabase
-    .from("thread_classifications")
-    .upsert(
-      automatedThreads.map((result) => ({
-        ...result.classification,
-        thread_id: result.threadId,
-      })),
-      { 
-        onConflict: 'thread_id',
-        ignoreDuplicates: true 
-      }
-    );
+  const { error } = await supabase.from("thread_classifications").upsert(
+    automatedThreads.map((result) => ({
+      ...result.classification,
+      thread_id: result.threadId,
+    })),
+    {
+      onConflict: "thread_id",
+      ignoreDuplicates: true,
+    },
+  );
 
   if (error) {
     console.error("Error upserting automated classifications:", error);

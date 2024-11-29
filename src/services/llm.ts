@@ -1,4 +1,5 @@
 import { Database } from "@/lib/types/supabase";
+import { retryWithBackoff } from "@/lib/utils/retry";
 import SYSTEM_PROMPT from "@/prompts";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
@@ -134,10 +135,10 @@ Body: ${email.body_text || email.body_html}`;
     const processEmailWithLogging = async (emailId: string) => {
       try {
         console.log(`→ Processing: ${emailId}`);
-        await this.processEmail(emailId);
+        await retryWithBackoff(() => this.processEmail(emailId));
         console.log(`✓ Success: ${emailId}`);
       } catch (error) {
-        console.error(`✗ Failed: ${emailId}`, error);
+        console.error(`✗ Failed after retries: ${emailId}`, error);
       }
     };
 
