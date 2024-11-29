@@ -334,6 +334,10 @@ export class GmailService {
   }
 
   private async updateSyncState(accountId: string, historyId: string) {
+    if (!historyId) {
+      console.error("❌ Cannot update sync state with null historyId");
+    }
+
     console.log(`Updating sync state for account ${accountId} with historyId ${historyId}`);
     const { data, error } = await retryWithBackoff<{
       data: any;
@@ -414,6 +418,9 @@ export class GmailService {
       } while (pageToken);
 
       const profile = await this.gmailRequest(accessToken, "profile", {});
+      if (!profile?.historyId) {
+        console.error("❌ Failed to get valid historyId from Gmail profile");
+      }
 
       // Create final sync state record
       await this.supabase.from("email_sync_states").insert({
@@ -484,6 +491,10 @@ export class GmailService {
           startHistoryId: startHistoryId,
         }),
       );
+
+      if (!response?.historyId) {
+        console.error("❌ Failed to get valid historyId from Gmail history");
+      }
 
       if (!response.history?.length) {
         console.log("No changes since last sync");
