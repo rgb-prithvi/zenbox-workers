@@ -1,4 +1,4 @@
-import { redisConnection, redisUrl } from "@/lib/config/redis";
+import { redisConnection } from "@/lib/config/redis";
 import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
 import {
@@ -7,44 +7,45 @@ import {
   insertAutomatedClassifications,
   processClassificationResults,
 } from "@/lib/utils/query-utils";
-import { checkEnvironmentVariables, createHealthCheckServer } from "@/lib/utils/worker-utils";
+import { checkEnvironmentVariables } from "@/lib/utils/worker-utils";
 import { EmailClassifier } from "@/services/classifier";
 import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import dotenv from "dotenv";
+import cron from "node-cron";
 import { DEFAULT_DAYS_TO_SYNC } from "./lib/constants";
 
 dotenv.config();
 
 checkEnvironmentVariables();
-const healthCheckServer = createHealthCheckServer();
+// const healthCheckServer = createHealthCheckServer();
 
-const HEALTH_CHECK_PORT = 8080;
-healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
-  console.log(`✅ Health check server listening on port ${HEALTH_CHECK_PORT}`);
-  console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
-});
+// const HEALTH_CHECK_PORT = 8080;
+// healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
+//   console.log(`✅ Health check server listening on port ${HEALTH_CHECK_PORT}`);
+//   console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
+// });
 
 // Add shutdown handler
 async function shutdown() {
-  console.log('Shutting down gracefully...');
-  
+  console.log("Shutting down gracefully...");
+
   // Close health check server
-  healthCheckServer.close(() => {
-    console.log('Health check server closed');
-  });
+  // healthCheckServer.close(() => {
+  //   console.log("Health check server closed");
+  // });
 
   // Close worker
   await worker.close();
-  console.log('Worker closed');
-  
+  console.log("Worker closed");
+
   process.exit(0);
 }
 
 // Add process handlers
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 
 // TODO: Add consistency to sync type
 const worker = new Worker<WorkerJobData>(
@@ -189,3 +190,37 @@ worker.on("failed", (job, error) => {
 });
 
 console.log("🚀 Worker started...");
+
+// Add at the end of your file
+cron.schedule("*/15 * * * *", async () => {
+  console.log("Running email sync cron job...");
+  try {
+    const queue = new Queue("email-processing", {
+      connection: redisConnection,
+    });
+
+    // Get all active email accounts from the database
+    const { data: accounts, error } = await supabase.from("email_accounts").select("email");
+
+    if (error) {
+      throw error;
+    }
+
+    // Create a job for each active account
+    for (const account of accounts) {
+      const jobId = `cron-sync-${account.email}-${Date.now()}`;
+      await queue.add(jobId, {
+        email: account.email,
+        sync_type: "INCREMENTAL_SYNC",
+        days_to_sync: DEFAULT_DAYS_TO_SYNC,
+        user_context: null, // We'll fetch this from the database when processing
+      });
+
+      console.log(`Created sync job ${jobId} for account ${account.email}`);
+    }
+
+    await queue.close();
+  } catch (error) {
+    console.error("Cron job failed:", error);
+  }
+});

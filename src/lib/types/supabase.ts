@@ -17,6 +17,7 @@ export type Database = {
           expires_at: string
           id: string
           refresh_token: string
+          user_context: string | null
           user_id: string
         }
         Insert: {
@@ -26,6 +27,7 @@ export type Database = {
           expires_at: string
           id?: string
           refresh_token: string
+          user_context?: string | null
           user_id: string
         }
         Update: {
@@ -35,6 +37,7 @@ export type Database = {
           expires_at?: string
           id?: string
           refresh_token?: string
+          user_context?: string | null
           user_id?: string
         }
         Relationships: [
@@ -117,6 +120,7 @@ export type Database = {
           created_at: string
           history_id: string | null
           id: string
+          is_classified: boolean | null
           last_message_at: string
           subject: string | null
           thread_summary: Json | null
@@ -126,6 +130,7 @@ export type Database = {
           created_at?: string
           history_id?: string | null
           id: string
+          is_classified?: boolean | null
           last_message_at: string
           subject?: string | null
           thread_summary?: Json | null
@@ -135,6 +140,7 @@ export type Database = {
           created_at?: string
           history_id?: string | null
           id?: string
+          is_classified?: boolean | null
           last_message_at?: string
           subject?: string | null
           thread_summary?: Json | null
@@ -326,21 +332,21 @@ export type Database = {
           {
             foreignKeyName: "thread_classifications_thread_id_fkey"
             columns: ["thread_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "active_thread_details"
             referencedColumns: ["thread_id"]
           },
           {
             foreignKeyName: "thread_classifications_thread_id_fkey"
             columns: ["thread_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "categorized_threads"
             referencedColumns: ["thread_id"]
           },
           {
             foreignKeyName: "thread_classifications_thread_id_fkey"
             columns: ["thread_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "email_threads"
             referencedColumns: ["id"]
           },
