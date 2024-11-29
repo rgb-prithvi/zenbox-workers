@@ -1,4 +1,3 @@
-import 'module-alias/register';
 import { redisConnection } from "@/lib/config/redis";
 import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
@@ -89,6 +88,10 @@ const worker = new Worker<WorkerJobData>(
         days_to_sync || DEFAULT_DAYS_TO_SYNC,
         metrics,
       );
+
+      // New Step: Update unread states
+      await gmailService.updateUnreadStates(email);
+      console.log("✅ Successfully updated unread states");
 
       await job.updateProgress(33);
 
@@ -193,8 +196,7 @@ worker.on("failed", (job, error) => {
 
 console.log("🚀 Worker started...");
 
-// Add at the end of your file
-cron.schedule("*/15 * * * *", async () => {
+cron.schedule("*/10 * * * *", async () => {
   console.log("Running email sync cron job...");
   try {
     const queue = new Queue("email-processing", {

@@ -563,4 +563,77 @@ export class GmailService {
         break;
     }
   }
+
+  async updateUnreadStates(email: string) {
+    console.log(`Updating unread states for ${email}`);
+  
+    try {
+      const { data: account, error: accountError } = await this.supabase
+        .from("email_accounts")
+        .select("*")
+        .eq("email", email)
+        .single();
+  
+      if (accountError) throw new Error(`No account found for ${email}`);
+  
+      // Get Gmail unread IDs
+      const accessToken = await this.setupGmailClient(account);
+      const response = await this.gmailRequest(accessToken, "messages", {
+        q: "is:unread",
+        maxResults: "500",
+      });
+  
+      const unreadIds = response.messages?.map((m: any) => m.id) || [];
+      console.log(`Found ${unreadIds.length} unread messages`);
+  
+      // First mark everything as read
+      const { error: markReadError } = await this.supabase
+        .from("emails")
+        .update({ is_read: true })
+        .eq("account_id", account.id);
+  
+      if (markReadError) {
+        console.error("Error marking all as read:", markReadError);
+        throw markReadError;
+      }
+  
+      // Then update unread in chunks only if we have unread emails
+      if (unreadIds.length > 0) {
+        const chunkSize = 100;
+        for (let i = 0; i < unreadIds.length; i += chunkSize) {
+          const chunk = unreadIds.slice(i, i + chunkSize);
+          
+          const { error: updateError } = await this.supabase
+            .from("emails")
+            .update({ is_read: false })
+            .eq("account_id", account.id)
+            .in("id", chunk);
+  
+          if (updateError) {
+            console.error(`Error updating chunk ${i}:`, updateError);
+            throw updateError;
+          }
+  
+          console.log(`Updated chunk ${i + 1}/${Math.ceil(unreadIds.length / chunkSize)}`);
+        }
+      }
+  
+      // Verify update
+      const { count } = await this.supabase
+        .from("emails")
+        .select("*", { count: "exact" })
+        .eq("account_id", account.id)
+        .eq("is_read", false);
+  
+      console.log(`Verification: ${count} emails marked as unread`);
+      
+      if (count !== unreadIds.length) {
+        console.warn(`Mismatch in unread counts: Gmail=${unreadIds.length}, DB=${count}`);
+      }
+  
+    } catch (error) {
+      console.error(`Error updating unread states for ${email}:`, error);
+      throw error;
+    }
+  }
 }

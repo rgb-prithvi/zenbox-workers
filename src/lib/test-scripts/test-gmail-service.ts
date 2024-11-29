@@ -63,6 +63,19 @@ async function testIncrementalSync() {
   }
 }
 
+async function testUnreadStates() {
+  console.log("\n🔄 Testing Unread States Update...");
+  const gmailService = new GmailService();
+
+  try {
+    await gmailService.updateUnreadStates(email);
+    console.log("✅ Unread states update completed successfully!");
+  } catch (error) {
+    console.error("❌ Unread states update failed:", error);
+    throw error;
+  }
+}
+
 async function main() {
   console.log("🚀 Starting Gmail Service Tests");
   console.log(`📧 Testing with email: ${email}`);
@@ -71,12 +84,15 @@ async function main() {
     // Test full sync first
     // await testFullSync();
 
+    // Test unread states update
+    await testUnreadStates();
+
     // Wait a bit before testing incremental sync
     // console.log("\nWaiting 5 seconds before testing incremental sync...");
     // await new Promise(resolve => setTimeout(resolve, 5000));
 
-    // // Test incremental sync
-    await testIncrementalSync();
+    // Test incremental sync
+    // await testIncrementalSync();
 
     console.log("\n✨ All tests completed successfully!");
   } catch (error) {
@@ -85,9 +101,4 @@ async function main() {
   }
 }
 
-// Only run if called directly
-if (require.main === module) {
-  main().catch(console.error);
-}
-
-export { testFullSync, testIncrementalSync };
+main().catch(console.error);
