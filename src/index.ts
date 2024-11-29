@@ -1,3 +1,4 @@
+import 'module-alias/register';
 import { redisConnection } from "@/lib/config/redis";
 import { supabase } from "@/lib/supabase-client";
 import { SyncMetrics, WorkerJobData } from "@/lib/types";
