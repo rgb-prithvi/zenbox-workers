@@ -1,8 +1,8 @@
+import { SyncMetrics } from "@/lib/types";
+import { Database } from "@/lib/types/supabase";
+import { retryWithBackoff } from "@/lib/utils/retry";
 import { createClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
-import { SyncMetrics } from "../types";
-import { Database } from "../types/supabase";
-import { retryWithBackoff } from "../utils/retry";
 
 type EmailAccount = Database["public"]["Tables"]["email_accounts"]["Row"];
 type Email = Database["public"]["Tables"]["emails"]["Row"];
@@ -334,6 +334,10 @@ export class GmailService {
   }
 
   private async updateSyncState(accountId: string, historyId: string) {
+    if (!historyId) {
+      console.error("❌ Cannot update sync state with null historyId");
+    }
+
     console.log(`Updating sync state for account ${accountId} with historyId ${historyId}`);
     const { data, error } = await retryWithBackoff<{
       data: any;
@@ -342,7 +346,7 @@ export class GmailService {
       this.supabase.from("email_sync_states").insert({
         account_id: accountId,
         last_history_id: historyId,
-        sync_type: "incremental",
+        sync_type: "INCREMENTAL_SYNC",
         status: "in_progress",
         emails_synced: 0,
         threads_synced: 0,
@@ -366,25 +370,6 @@ export class GmailService {
       .single();
 
     if (error) throw new Error(`No account found for ${email}`);
-
-    // Create initial sync state
-    const { data: syncState, error: syncStateError } = await this.supabase
-      .from("email_sync_states")
-      .insert({
-        account_id: account.id,
-        sync_type: "full",
-        status: "in_progress",
-        started_at: new Date().toISOString(),
-        emails_synced: 0,
-        threads_synced: 0,
-      })
-      .select()
-      .single();
-
-    if (syncStateError) {
-      console.error("Failed to create sync state:", syncStateError);
-      throw syncStateError;
-    }
 
     const accessToken = await this.setupGmailClient(account);
     let pageToken: string | undefined;
@@ -427,43 +412,36 @@ export class GmailService {
 
         pageToken = response.nextPageToken;
 
-        // Update sync state periodically
-        await this.supabase
-          .from("email_sync_states")
-          .update({
-            emails_synced: emailsSynced,
-            threads_synced: threadsSynced,
-          })
-          .eq("id", syncState.id);
-
         if (pageToken) {
           await new Promise((r) => setTimeout(r, 1000));
         }
       } while (pageToken);
 
       const profile = await this.gmailRequest(accessToken, "profile", {});
+      if (!profile?.historyId) {
+        console.error("❌ Failed to get valid historyId from Gmail profile");
+      }
 
-      // Update final sync state
-      await this.supabase
-        .from("email_sync_states")
-        .update({
-          last_history_id: profile.historyId,
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          emails_synced: emailsSynced,
-          threads_synced: threadsSynced,
-        })
-        .eq("id", syncState.id);
+      // Create final sync state record
+      await this.supabase.from("email_sync_states").insert({
+        account_id: account.id,
+        last_history_id: profile.historyId,
+        status: "completed",
+        sync_type: "FULL_SYNC",
+        completed_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+        emails_synced: emailsSynced,
+        threads_synced: threadsSynced,
+      });
     } catch (error) {
-      // Update sync state with error
-      await this.supabase
-        .from("email_sync_states")
-        .update({
-          status: "failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", syncState.id);
+      await this.supabase.from("email_sync_states").insert({
+        account_id: account.id,
+        status: "failed",
+        sync_type: "FULL_SYNC",
+        error: error instanceof Error ? error.message : "Unknown error",
+        completed_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+      });
 
       metrics.errors++;
       console.error(`Error syncing new account for email: ${email}`, error);
@@ -514,6 +492,10 @@ export class GmailService {
         }),
       );
 
+      if (!response?.historyId) {
+        console.error("❌ Failed to get valid historyId from Gmail history");
+      }
+
       if (!response.history?.length) {
         console.log("No changes since last sync");
         return;
@@ -558,6 +540,27 @@ export class GmailService {
       metrics.errors++;
       console.error(`Error during incremental sync for email: ${email}`, error);
       throw error;
+    }
+  }
+
+  async triggerSync(
+    email: string,
+    // TODO: Make this an enum and make consistent with Supabase
+    syncType: "FULL_SYNC" | "BACKFILL_SYNC" | "INCREMENTAL_SYNC",
+    daysToSync: number,
+    metrics: SyncMetrics,
+  ) {
+    console.log(`Triggering ${syncType} sync for email: ${email}`);
+    switch (syncType) {
+      case "FULL_SYNC":
+        await this.syncNewAccount(email, daysToSync, metrics);
+        break;
+      case "BACKFILL_SYNC":
+        await this.syncNewAccount(email, daysToSync, metrics);
+        break;
+      case "INCREMENTAL_SYNC":
+        await this.syncChanges(email, metrics);
+        break;
     }
   }
 }

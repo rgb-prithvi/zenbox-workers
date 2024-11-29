@@ -4,12 +4,18 @@
     "module": "commonjs",
     "outDir": "./dist",
     "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "moduleResolution": "node",
+    "rootDirs": ["./src", "./lib"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/test-scripts/**/*"]
+  "exclude": ["node_modules"]
 }

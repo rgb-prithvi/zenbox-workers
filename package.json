@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "generate-types": "supabase gen types typescript --project-id kxmpemmfddkoribhiomg > src/types/supabase.ts"
+    "worker": "pnpm dlx tsx src/index.ts",
+    "test": "pnpm dlx tsx src/lib/test-scripts/test-index-worker.ts",
+    "generate-types": "supabase gen types typescript --project-id kxmpemmfddkoribhiomg > src/lib/types/supabase.ts"
   },
   "keywords": [],
   "author": "",

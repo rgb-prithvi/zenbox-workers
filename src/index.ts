@@ -1,93 +1,72 @@
-import { createClient } from "@supabase/supabase-js";
+import { redisConnection, redisUrl } from "@/lib/config/redis";
+import { supabase } from "@/lib/supabase-client";
+import { SyncMetrics, WorkerJobData } from "@/lib/types";
+import {
+  getEmailAccount,
+  getUnclassifiedThreads,
+  insertAutomatedClassifications,
+  processClassificationResults,
+} from "@/lib/utils/query-utils";
+import { checkEnvironmentVariables, createHealthCheckServer } from "@/lib/utils/worker-utils";
+import { EmailClassifier } from "@/services/classifier";
+import { GmailService } from "@/services/gmail";
+import { LLMService } from "@/services/llm";
 import { Worker } from "bullmq";
 import dotenv from "dotenv";
-import http from "http";
-import { logRedisConnection, redisConnection, redisUrl } from "./config/redis";
-import { EmailClassifier } from "./services/classifier";
-import { GmailService } from "./services/gmail";
-import { LLMService } from "./services/llm";
-import { SyncMetrics, WorkerJobData } from "./types";
-import { getUnclassifiedThreads } from "./utils/query-utils";
+import { DEFAULT_DAYS_TO_SYNC } from "./lib/constants";
 
 dotenv.config();
 
-const requiredEnvVars = [
-  "GMAIL_CLIENT_ID",
-  "GMAIL_CLIENT_SECRET",
-  "GMAIL_REDIRECT_URI",
-  "SUPABASE_URL",
-  "SUPABASE_SERVICE_KEY",
-];
+checkEnvironmentVariables();
+const healthCheckServer = createHealthCheckServer();
 
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
-  }
+const HEALTH_CHECK_PORT = 8080;
+healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
+  console.log(`✅ Health check server listening on port ${HEALTH_CHECK_PORT}`);
+  console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
+});
+
+// Add shutdown handler
+async function shutdown() {
+  console.log('Shutting down gracefully...');
+  
+  // Close health check server
+  healthCheckServer.close(() => {
+    console.log('Health check server closed');
+  });
+
+  // Close worker
+  await worker.close();
+  console.log('Worker closed');
+  
+  process.exit(0);
 }
 
-// Add a flag to track worker readiness
-let workerReady = false;
+// Add process handlers
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
-// Healthcheck server
-const server = http.createServer((req, res) => {
-  if (req.url === "/health" || req.url === "/") {
-    // Only return 200 if the worker is ready
-    if (workerReady) {
-      res.writeHead(200);
-      res.end("OK");
-    } else {
-      res.writeHead(503);
-      res.end("Service not ready");
-    }
-    return;
-  }
-  res.writeHead(404);
-  res.end();
-});
-
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  console.log(`Health check server listening on port ${PORT}`);
-  console.log(
-    "Worker started with connection to:",
-    process.env.NODE_ENV === "production" ? redisUrl.hostname : "localhost",
-  );
-});
-
-// Add LLM queue setup
-logRedisConnection();
-
+// TODO: Add consistency to sync type
 const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
     try {
+      // TODO: Make sure zen-inbox schema is consistent
       const { email, sync_type, days_to_sync, user_context } = job.data;
       console.log(
-        `Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
+        `🔄 Processing job ${job.id} for email ${email} with sync type ${sync_type} and days to sync ${days_to_sync}`,
       );
+      console.log(`--------------------------------\n`);
       await job.updateProgress(0);
 
-      // Initialize services
-      const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
-
-      // Get account details using email
-      console.log("Searching for email account:", email);
-      const { data: emailAccount, error } = await supabase
-        .from("email_accounts")
-        .select("*")
-        .eq("email", email)
-        .single();
-
-      if (error || !emailAccount) {
-        throw new Error(
-          `No account found for email ${email} (Error: ${error?.message || "account not found"})`,
-        );
-      }
+      const emailAccount = await getEmailAccount(email);
 
       const gmailService = new GmailService();
       const classifier = new EmailClassifier();
       const llmService = new LLMService(user_context);
 
+      // TODO: Figure out what's good with these metrics
+      // Probably not reliable rn -- clean up and consolidate logic
       const metrics: SyncMetrics = {
         startTime: Date.now(),
         threadsProcessed: 0,
@@ -97,116 +76,35 @@ const worker = new Worker<WorkerJobData>(
       };
 
       // Step 1: Sync emails based on sync type
-      console.log(`Starting ${sync_type} for account ${email}`);
-      if (!emailAccount) {
-        throw new Error(`No account found for ID ${email}`);
-      }
+      console.log(
+        `✅ Successfully fetched email account ${emailAccount.email} & instantiated services...`,
+      );
+      console.log(`🔄Starting ${sync_type} for account ${email}`);
+      await gmailService.triggerSync(
+        email,
+        sync_type,
+        days_to_sync || DEFAULT_DAYS_TO_SYNC,
+        metrics,
+      );
 
-      switch (sync_type) {
-        case "FULL_SYNC":
-          await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 14, metrics);
-          break;
-        case "BACKFILL_SYNC":
-          await gmailService.syncNewAccount(emailAccount.email, days_to_sync || 30, metrics);
-          break;
-        case "INCREMENTAL_SYNC":
-          await gmailService.syncChanges(emailAccount.email, metrics);
-          break;
-      }
       await job.updateProgress(33);
 
       // Step 2: Classify new threads
       console.log("Finding unclassified threads...");
-      const {
-        unclassifiedThreads,
-        stats,
-        error: queryError,
-      } = await getUnclassifiedThreads(supabase, emailAccount.id);
+      const { unclassifiedThreads } = await getUnclassifiedThreads(supabase, emailAccount.id);
 
-      if (queryError) {
-        throw new Error(`Failed to fetch unclassified threads: ${queryError}`);
-      }
-
-      console.log(
-        `Found ${stats.unclassifiedThreads} unclassified threads (${stats.totalThreads} total threads, ${stats.classifiedThreads} classified)`,
-      );
-
-      // Enhanced logging
-      if (stats.unclassifiedThreads === 0) {
-        console.log("No unclassified threads found - skipping classification step");
-      } else {
-        console.log("Starting classification of threads...");
-      }
-
-      for (const thread of unclassifiedThreads) {
-        try {
-          console.log(`\nProcessing thread: ${thread.id}`);
-          console.log(`Subject: ${thread.subject}`);
-
-          const classification = await classifier.classifyThread(thread.id);
-          console.log(
-            `Classification result: ${
-              classification.is_automated ? "Automated" : "Not Automated"
-            }, ` +
-              `Category: ${classification.category}, Confidence: ${classification.confidence_score}`,
-          );
-
-          // If email is not automated, process with LLM
-          if (!classification.is_automated) {
-            console.log(`Processing non-automated thread ${thread.id} with LLM...`);
-
-            const { data: threadEmails } = await supabase
-              .from("emails")
-              .select("*")
-              .eq("thread_id", thread.id)
-              .order("received_at", { ascending: false })
-              .limit(5); // Increased from 3 to 5 for better batching
-
-            if (threadEmails?.length) {
-              const batchSize = 5; // Process 5 emails at once
-              const batches: (typeof threadEmails)[] = [];
-              for (let i = 0; i < threadEmails.length; i += batchSize) {
-                batches.push(threadEmails.slice(i, i + batchSize));
-              }
-
-              console.log(`Processing ${threadEmails.length} emails in ${batches.length} batches`);
-
-              try {
-                await Promise.all(
-                  batches.map((batch) =>
-                    llmService.processBatch(
-                      batch.map((e) => e.id),
-                      3,
-                    ),
-                  ),
-                );
-                console.log(`Successfully processed all emails from thread ${thread.id}`);
-              } catch (error) {
-                console.error(`LLM processing failed for thread ${thread.id}:`, error);
-                metrics.errors++;
-              }
-            }
-          } else {
-            console.log(`Thread ${thread.id} is automated - skipping LLM processing`);
-          }
-
-          metrics.threadsProcessed++;
-          if (metrics.threadsProcessed % 10 === 0) {
-            console.log(`Progress: Processed ${metrics.threadsProcessed} threads so far`);
-          }
-        } catch (error) {
-          console.error(`Error classifying thread ${thread.id}:`, error);
-          metrics.errors++;
-        }
-      }
+      const threadClassifications = await classifier.batchProcessThreads(unclassifiedThreads);
+      const { automatedThreads, nonAutomatedThreads } =
+        processClassificationResults(threadClassifications);
+      await insertAutomatedClassifications(supabase, automatedThreads);
 
       await job.updateProgress(66);
+      console.log(
+        `Classifier Complete:\n✅ Successfully inserted ${automatedThreads.length} automated classifications`,
+      );
 
-      console.log(`\nClassification complete:`);
-      console.log(`- Threads processed: ${metrics.threadsProcessed}`);
-      console.log(`- Errors encountered: ${metrics.errors}`);
-
-      // Store sync metrics
+      // TODO: Revisit this metrics object...
+      // Move these inserts to a utils function
       await supabase.from("sync_metrics").insert({
         email: emailAccount.email,
         duration_ms: Date.now() - metrics.startTime,
@@ -217,7 +115,7 @@ const worker = new Worker<WorkerJobData>(
         success: metrics.errors === 0,
       });
 
-      // Add sync state record
+      // Move this up to occur after email sync and before classification
       await supabase.from("email_sync_states").insert({
         account_id: emailAccount.id,
         last_history_id: emailAccount.last_history_id,
@@ -230,18 +128,16 @@ const worker = new Worker<WorkerJobData>(
       });
 
       // Step 3: Process non-automated threads with LLM
-      // This will be handled by a separate worker process
+      console.log(`🔄 Starting LLM classification for ${nonAutomatedThreads.length} threads...`);
+      if (nonAutomatedThreads.length > 0) {
+        const emailIds = nonAutomatedThreads.map((thread) => thread.threadId);
+        await llmService.processBatch(emailIds);
+      }
+
       await job.updateProgress(100);
 
       return {
         success: true,
-        metrics: {
-          duration_ms: Date.now() - metrics.startTime,
-          threads_processed: metrics.threadsProcessed,
-          emails_processed: metrics.emailsProcessed,
-          errors: metrics.errors,
-          retries: metrics.retries,
-        },
       };
     } catch (error) {
       console.error("Job failed:", error);
@@ -250,25 +146,18 @@ const worker = new Worker<WorkerJobData>(
   },
   {
     connection: redisConnection,
-    // Add connection options
     autorun: true,
     maxStalledCount: 10,
   },
 );
 
-// Add worker ready event handler
 worker.on("ready", () => {
-  console.log("Worker is ready to process jobs");
-  workerReady = true;
+  console.log("Worker ready handler triggered: Worker is ready to process jobs!");
 });
 
-// Add connection error handler
 worker.on("error", (error) => {
-  console.error("Worker connection error:", error);
-  workerReady = false;
+  console.error("Worker connection error triggered:", error);
 });
-
-// Error handling
 
 interface JobLog {
   jobId: string;
@@ -299,4 +188,4 @@ worker.on("failed", (job, error) => {
   console.table(jobLogs);
 });
 
-console.log("Worker started...");
+console.log("🚀 Worker started...");
