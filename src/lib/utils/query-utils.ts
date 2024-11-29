@@ -42,6 +42,7 @@ export async function getUnclassifiedThreads(
       created_at,
       history_id,
       thread_summary,
+      is_classified,
       emails (*)
     `,
       )
