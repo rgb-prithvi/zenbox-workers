@@ -342,7 +342,7 @@ export class GmailService {
       this.supabase.from("email_sync_states").insert({
         account_id: accountId,
         last_history_id: historyId,
-        sync_type: "incremental",
+        sync_type: "INCREMENTAL_SYNC",
         status: "in_progress",
         emails_synced: 0,
         threads_synced: 0,
@@ -420,7 +420,7 @@ export class GmailService {
         account_id: account.id,
         last_history_id: profile.historyId,
         status: "completed",
-        sync_type: "full",
+        sync_type: "FULL_SYNC",
         completed_at: new Date().toISOString(),
         started_at: new Date().toISOString(),
         emails_synced: emailsSynced,
@@ -430,7 +430,7 @@ export class GmailService {
       await this.supabase.from("email_sync_states").insert({
         account_id: account.id,
         status: "failed",
-        sync_type: "full",
+        sync_type: "FULL_SYNC",
         error: error instanceof Error ? error.message : "Unknown error",
         completed_at: new Date().toISOString(),
         started_at: new Date().toISOString(),
