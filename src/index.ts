@@ -12,10 +12,9 @@ import { checkEnvironmentVariables } from "@/lib/utils/worker-utils";
 import { EmailClassifier } from "@/services/classifier";
 import { GmailService } from "@/services/gmail";
 import { LLMService } from "@/services/llm";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import dotenv from "dotenv";
 import 'module-alias/register';
-import cron from "node-cron";
 import { DEFAULT_DAYS_TO_SYNC } from "./lib/constants";
 
 dotenv.config();
@@ -212,35 +211,4 @@ worker.on("failed", (job, error) => {
 
 console.log("🚀 Worker started...");
 
-cron.schedule("*/10 * * * *", async () => {
-  console.log("Running email sync cron job...");
-  try {
-    const queue = new Queue("email-processing", {
-      connection: redisConnection,
-    });
-
-    // Get all active email accounts from the database
-    const { data: accounts, error } = await supabase.from("email_accounts").select("email");
-
-    if (error) {
-      throw error;
-    }
-
-    // Create a job for each active account
-    for (const account of accounts) {
-      const jobId = `cron-sync-${account.email}-${Date.now()}`;
-      await queue.add(jobId, {
-        email: account.email,
-        sync_type: "INCREMENTAL_SYNC",
-        days_to_sync: DEFAULT_DAYS_TO_SYNC,
-        user_context: null, // We'll fetch this from the database when processing
-      });
-
-      console.log(`Created sync job ${jobId} for account ${account.email}`);
-    }
-
-    await queue.close();
-  } catch (error) {
-    console.error("Cron job failed:", error);
-  }
-});
+// cron.schedule("*/10 * * * *", cronJobCallback);

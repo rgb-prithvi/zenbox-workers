@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = "prithvi@genaicollective.ai";
+const email = "prithvi.arunaraj@gmail.com";
 const userContext = `
 User Name: Prithvi
 
@@ -42,23 +42,23 @@ async function testIndexWorker() {
 
     // Test cases
     const testCases = [
-      // {
-      //   name: "Full Sync Test",
-      //   data: {
-      //     email,
-      //     sync_type: "FULL_SYNC" as const,
-      //     days_to_sync: 2,
-      //     user_context: userContext,
-      //   },
-      // },
       {
-        name: "Incremental Sync Test",
+        name: "Full Sync Test",
         data: {
           email,
-          sync_type: "INCREMENTAL_SYNC" as const,
+          sync_type: "FULL_SYNC" as const,
+          days_to_sync: 2,
           user_context: userContext,
         },
       },
+      // {
+      //   name: "Incremental Sync Test",
+      //   data: {
+      //     email,
+      //     sync_type: "INCREMENTAL_SYNC" as const,
+      //     user_context: userContext,
+      //   },
+      // },
     ];
 
     // Run test cases
