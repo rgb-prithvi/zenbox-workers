@@ -10,7 +10,7 @@ Built with TypeScript and BullMQ, this system handles email processing at scale 
 
 - **Distributed Processing**: BullMQ for reliable task execution
 - **AI-Powered Classification**: 
-  - Rule-based and ML classification pipeline
+  - Rule-based and LLM classification pipeline
   - Pattern matching for common cases
   - LLM analysis for complex threads
 - **Gmail Integration**: 
