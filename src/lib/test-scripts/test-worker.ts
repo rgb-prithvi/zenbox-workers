@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = "prithvi@genaicollective.ai";
+const email = "prithvi.arunaraj@gmail.com";
 
 async function main() {
   const queue = new Queue("email-processing", {

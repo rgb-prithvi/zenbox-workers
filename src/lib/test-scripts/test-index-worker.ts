@@ -7,11 +7,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = "prithvi.arunaraj@gmail.com";
+const email = "prithvi@genaicollective.ai";
 const userContext = `
 User Name: Prithvi
 
-User Context: “My name is Prithvi. I run an AI community called GenAI Collective. A lot of the messages in my inbox are from people in the community, and come in via "Luma", our events hosting platform. Many of these emails are about upcoming events. I specifically run the NYC chapter of the GenAI Collective, so many of the emails from other chapters (Boston, Paris, SF, etc) are not relevant for me, and hence should be marked as "NOT RELEVANT". Messages addressed to GenAI Collective NYC needs my review, as I am the leader of the NYC chapter and therefore the responsible party for the email.”
+User Context: “My name is Prithvi. I have an active inbox with lots of messages that are automated, but others that are key. In particular, all Fireflies meeting recaps should be marked as ACTIVE DISCUSSION.”
 `;
 
 const checkAccountExists = async (supabase: SupabaseClient<Database>, email: string) => {
@@ -47,7 +47,7 @@ async function testIndexWorker() {
         data: {
           email,
           sync_type: "FULL_SYNC" as const,
-          days_to_sync: 2,
+          days_to_sync: 7,
           user_context: userContext,
         },
       },

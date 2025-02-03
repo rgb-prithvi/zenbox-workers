@@ -16,39 +16,36 @@ import { Worker } from "bullmq";
 import dotenv from "dotenv";
 import 'module-alias/register';
 import { DEFAULT_DAYS_TO_SYNC } from "./lib/constants";
+import { createHealthCheckServer } from '@/lib/utils/worker-utils';
+import { redisUrl } from '@/lib/config/redis';
 
 dotenv.config();
 
 checkEnvironmentVariables();
-// const healthCheckServer = createHealthCheckServer();
+const healthCheckServer = createHealthCheckServer();
 
-// const HEALTH_CHECK_PORT = 8080;
-// healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
-//   console.log(`✅ Health check server listening on port ${HEALTH_CHECK_PORT}`);
-//   console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
-// });
+const HEALTH_CHECK_PORT = 8080;
+healthCheckServer.listen(HEALTH_CHECK_PORT, () => {
+  console.log(`✅ Health check server listening on port ${HEALTH_CHECK_PORT}`);
+  console.log(`✅ Worker started with connection to: ${redisUrl.hostname}`);
+});
 
-// Add shutdown handler
 async function shutdown() {
   console.log("Shutting down gracefully...");
 
-  // Close health check server
-  // healthCheckServer.close(() => {
-  //   console.log("Health check server closed");
-  // });
+  healthCheckServer.close(() => {
+    console.log("Health check server closed");
+  });
 
-  // Close worker
   await worker.close();
   console.log("Worker closed");
 
   process.exit(0);
 }
 
-// Add process handlers
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
-// TODO: Add consistency to sync type
 const worker = new Worker<WorkerJobData>(
   "email-processing",
   async (job) => {
@@ -60,13 +57,13 @@ const worker = new Worker<WorkerJobData>(
       console.log(`--------------------------------\n`);
       await job.updateProgress(0);
 
-      // Add rate limiting check
+
       const gmailService = new GmailService();
       const { syncState, error: syncError } = await gmailService.getLastCompletedSyncState(email);
       
       if (syncState && !syncError) {
         const lastSyncTime = new Date(syncState.completed_at).getTime();
-        const oneMinuteAgo = Date.now() - 60 * 1000; // 1 minute in milliseconds
+        const oneMinuteAgo = Date.now() - 60 * 1000; 
         
         if (lastSyncTime > oneMinuteAgo) {
           console.log(`Skipping sync for ${email} - last sync was less than 1 minute ago`);
@@ -82,8 +79,6 @@ const worker = new Worker<WorkerJobData>(
       const classifier = new EmailClassifier();
       const llmService = new LLMService(user_context);
 
-      // TODO: Figure out what's good with these metrics
-      // Probably not reliable rn -- clean up and consolidate logic
       const metrics: SyncMetrics = {
         startTime: Date.now(),
         threadsProcessed: 0,
@@ -104,7 +99,6 @@ const worker = new Worker<WorkerJobData>(
         metrics,
       );
 
-      // New Step: Update unread states
       await gmailService.updateUnreadStates(email);
       console.log("✅ Successfully updated unread states");
 
