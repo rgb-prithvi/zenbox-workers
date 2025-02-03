@@ -53,6 +53,9 @@ The system operates through a series of coordinated steps:
 ## 🚀 Getting Started
 
 1. Clone the repository
+```bash
+git clone git@github.com:rgb-prithvi/zenbox-workers.git
+```
 2. Install dependencies:
    ```bash
    npm install
@@ -72,4 +75,4 @@ The system operates through a series of coordinated steps:
 
 ---
 
-Built with ❤️ using modern TypeScript and cutting-edge AI technology.
+Built with ❤️ with TypeScript
