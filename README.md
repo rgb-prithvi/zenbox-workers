@@ -53,9 +53,9 @@ The system operates through a series of coordinated steps:
 ## 🚀 Getting Started
 
 1. Clone the repository
-```bash
-git clone git@github.com:rgb-prithvi/zenbox-workers.git
-```
+   ```bash
+   git clone git@github.com:rgb-prithvi/zenbox-workers.git
+   ```
 2. Install dependencies:
    ```bash
    npm install
@@ -68,10 +68,6 @@ git clone git@github.com:rgb-prithvi/zenbox-workers.git
    ```bash
    npm run start
    ```
-
-## 📝 License
-
-[MIT License](LICENSE)
 
 ---
 
