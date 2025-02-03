@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = "prithvi@genaicollective.ai";
+const email = process.env.TEST_EMAIL;
 const userContext = `
 User Name: Prithvi
 
