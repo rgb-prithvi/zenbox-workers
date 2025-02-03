@@ -1,28 +1,28 @@
 # Zenbox Workers
 
-A high-performance, distributed email processing system that leverages AI to intelligently classify and organize Gmail messages at scale.
+A distributed email processing system using AI to classify and organize Gmail messages. Built as the backend worker infrastructure for a larger email management system. Check out [Zenbox](https://zen-inbox.vercel.app/) to see the complete product vision.
 
 ## 🚀 Overview
 
-Zenbox Workers is an enterprise-grade job queue architecture that seamlessly integrates Gmail synchronization with advanced AI classification. Built with TypeScript and BullMQ, it provides robust, scalable email processing capabilities with intelligent error handling and comprehensive monitoring.
+Built with TypeScript and BullMQ, this system handles email processing at scale with robust error handling and comprehensive monitoring. It powers the backend for a companion Next.js email client (private repository), creating a complete email management solution.
 
 ## ✨ Key Features
 
-- **Distributed Job Processing**: Leverages BullMQ for reliable, distributed task execution
-- **Intelligent Email Classification**: 
-  - Multi-tier classification system combining rule-based and AI approaches
-  - Automated classification for common email patterns
-  - Advanced LLM-powered classification for complex cases
-- **Robust Gmail Integration**: 
-  - Efficient email synchronization with configurable time windows
-  - Smart duplicate detection and rate limiting
-- **Enterprise-Ready Infrastructure**:
-  - Health check monitoring
-  - Graceful shutdown handling
-  - Comprehensive error tracking
-  - Detailed job logging and metrics
-  - Redis-backed job persistence
-  - Deployment on Railway 
+- **Distributed Processing**: BullMQ for reliable task execution
+- **AI-Powered Classification**: 
+  - Rule-based and ML classification pipeline
+  - Pattern matching for common cases
+  - LLM analysis for complex threads
+- **Gmail Integration**: 
+  - Efficient sync with rate limiting
+  - Duplicate detection
+- **Production Infrastructure**:
+  - Health monitoring
+  - Graceful shutdown
+  - Error tracking
+  - Metrics and logging
+  - Redis persistence
+  - Railway deployment
 
 ## 🏗️ Architecture
 
@@ -36,11 +36,9 @@ The system operates through a series of coordinated steps:
    - Initial automated classification for known patterns
    - LLM-powered analysis for complex threads
    - Persistent storage of classification results
-
-3. **Monitoring & Metrics**:
-   - Real-time job progress tracking
-   - Comprehensive sync metrics collection
-   - Detailed error logging and reporting
+   
+3. **Frontend Integration**:
+   - Exposes processed data to companion Next.js application (read from Supabase DB backend)
 
 ## 🛠️ Technology Stack
 
