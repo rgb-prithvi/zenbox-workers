@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = "prithvi.arunaraj@gmail.com";
+const email = process.env.TEST_EMAIL;
 
 async function main() {
   const queue = new Queue("email-processing", {

@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase-client";
 import { getUnclassifiedThreads } from "../utils/query-utils";
 
-const testAccountId = "70d72857-f2a1-4d72-acb3-4ed79c2f3def";
+const testAccountId = ""; // TODO: Replace with account ID
 
 async function testGetUnclassifiedThreads() {
   try {

@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const email = process.env.TEST_EMAIL || "prithvi@genaicollective.ai";
+const email = process.env.TEST_EMAIL;
 
 async function printMetrics(metrics: SyncMetrics) {
   const duration = Date.now() - metrics.startTime;
